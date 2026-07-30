@@ -1,4 +1,4 @@
 package com.example.securityutilitysuite.repository;
 
-public class ScanRequest {
+public class ScanResultRepository {
 }
