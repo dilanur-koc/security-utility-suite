@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  web:
+    image: nginx:latest
+    ports:
+      - "127.0.0.1:8081:80"
+
+  ssh-like:
+    image: nginx:latest
+    ports:
+      - "127.0.0.1:2222:80"
+
+  db-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: test1234
+    ports:
+      - "127.0.0.1:5433:5432"
+
+  cache-redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6380:6379"
+
+  ftp-like:
+    image: nginx:latest
+    ports:
+      - "127.0.0.1:2121:80"

@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="tr" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Utility Suite — Kontrol Paneli</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root{
+            --bg:            #0a0e13;
+            --surface:       #121821;
+            --surface-alt:   #171f29;
+            --border:        #253140;
+            --text:          #dce6ee;
+            --muted:         #6b7c8c;
+            --cyan:          #2fd8c8;
+            --cyan-dim:      rgba(47,216,200,.14);
+            --amber:         #f0a93b;
+            --amber-dim:     rgba(240,169,59,.14);
+            --red:           #e5484d;
+            --red-dim:       rgba(229,72,77,.14);
+        }
+
+        *{ box-sizing:border-box; }
+
+        body{
+            background:
+                    radial-gradient(1200px 500px at 15% -10%, rgba(47,216,200,.07), transparent 60%),
+                    radial-gradient(900px 500px at 100% 0%, rgba(240,169,59,.05), transparent 55%),
+                    var(--bg);
+            color:var(--text);
+            font-family:'Inter',system-ui,sans-serif;
+            min-height:100vh;
+        }
+
+        .font-display{ font-family:'Space Grotesk',sans-serif; letter-spacing:-.01em; }
+        .font-mono{ font-family:'JetBrains Mono',monospace; }
+
+        /* ---------- Navbar / hero strip ---------- */
+        .navbar-suite{
+            background:linear-gradient(180deg, rgba(18,24,33,.9), rgba(18,24,33,.6));
+            border-bottom:1px solid var(--border);
+            backdrop-filter:blur(6px);
+        }
+        .brand-mark{
+            width:38px;height:38px;border-radius:9px;
+            background:linear-gradient(135deg, var(--cyan), #1b8f84);
+            display:flex;align-items:center;justify-content:center;
+            color:#04140f;font-weight:700;font-size:1.05rem;
+            box-shadow:0 0 0 1px rgba(47,216,200,.35), 0 8px 20px -8px rgba(47,216,200,.6);
+        }
+        .pulse-dot{
+            width:8px;height:8px;border-radius:50%;background:var(--cyan);
+            box-shadow:0 0 0 0 rgba(47,216,200,.7);
+            animation:pulse 2s infinite;
+        }
+        @keyframes pulse{
+            0%{ box-shadow:0 0 0 0 rgba(47,216,200,.55); }
+            70%{ box-shadow:0 0 0 8px rgba(47,216,200,0); }
+            100%{ box-shadow:0 0 0 0 rgba(47,216,200,0); }
+        }
+        .status-ticker{ font-size:.78rem; color:var(--muted); }
+        .status-ticker span.value{ color:var(--cyan); }
+
+        /* ---------- Module tabs ---------- */
+        .module-nav{
+            display:flex; gap:.5rem; flex-wrap:wrap;
+            border-bottom:1px solid var(--border);
+            padding-bottom:0;
+        }
+        .module-nav .nav-link{
+            color:var(--muted);
+            font-family:'Space Grotesk',sans-serif;
+            font-weight:600;
+            font-size:.92rem;
+            border:1px solid transparent;
+            border-bottom:none;
+            border-radius:10px 10px 0 0;
+            padding:.7rem 1.1rem;
+            display:flex; align-items:center; gap:.5rem;
+        }
+        .module-nav .nav-link .bi{ font-size:1rem; }
+        .module-nav .nav-link.active{
+            color:var(--text);
+            background:var(--surface);
+            border-color:var(--border);
+            position:relative;
+        }
+        /* signature: scanning sweep line on the active module tab */
+        .module-nav .nav-link.active::after{
+            content:"";
+            position:absolute; left:8px; right:8px; top:-1px; height:2px;
+            background:linear-gradient(90deg, transparent, var(--cyan), transparent);
+            background-size:200% 100%;
+            animation:sweep 2.6s linear infinite;
+        }
+        @keyframes sweep{
+            0%{ background-position:200% 0; }
+            100%{ background-position:-200% 0; }
+        }
+
+        .tab-content-panel{
+            background:var(--surface);
+            border:1px solid var(--border);
+            border-top:none;
+            border-radius:0 10px 10px 10px;
+            padding:1.75rem;
+        }
+
+        /* ---------- Cards / surfaces ---------- */
+        .card-suite{
+            background:var(--surface-alt);
+            border:1px solid var(--border);
+            border-radius:12px;
+        }
+        .form-label{ font-size:.82rem; color:var(--muted); font-weight:500; }
+        .form-control, .form-select{
+            background:var(--bg); border:1px solid var(--border); color:var(--text);
+        }
+        .form-control:focus, .form-select:focus{
+            background:var(--bg); color:var(--text); border-color:var(--cyan);
+            box-shadow:0 0 0 .2rem rgba(47,216,200,.15);
+        }
+        .form-control::placeholder{ color:#3d4b58; }
+
+        .btn-scan{
+            background:var(--cyan); border:none; color:#04140f; font-weight:600;
+            font-family:'Space Grotesk',sans-serif;
+        }
+        .btn-scan:hover{ background:#28c2b3; color:#04140f; }
+        .btn-scan:disabled{ opacity:.6; }
+
+        .btn-outline-suite{
+            border:1px solid var(--border); color:var(--text); background:transparent;
+        }
+        .btn-outline-suite:hover{ border-color:var(--cyan); color:var(--cyan); background:transparent; }
+
+        /* ---------- Badges ---------- */
+        .badge-status{ font-family:'JetBrains Mono',monospace; font-weight:500; font-size:.72rem; padding:.35em .6em; border-radius:6px; }
+        .badge-completed{ background:var(--cyan-dim); color:var(--cyan); }
+        .badge-inprogress{ background:var(--amber-dim); color:var(--amber); }
+        .badge-failed{ background:var(--red-dim); color:var(--red); }
+
+        .port-chip{
+            font-family:'JetBrains Mono',monospace; font-size:.76rem;
+            background:var(--cyan-dim); color:var(--cyan);
+            border-radius:5px; padding:.15em .5em; margin:.1em;
+            display:inline-block;
+        }
+
+        table{ color:var(--text); }
+        .table-suite{ --bs-table-bg:transparent; }
+        .table-suite thead th{
+            color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.04em;
+            border-bottom:1px solid var(--border); font-weight:600;
+        }
+        .table-suite td{ border-bottom:1px solid var(--border); vertical-align:middle; font-size:.88rem; }
+        .table-suite tbody tr:hover{ background:rgba(47,216,200,.04); }
+
+        .empty-state{ color:var(--muted); text-align:center; padding:2.5rem 1rem; }
+        .empty-state .bi{ font-size:1.8rem; color:var(--border); }
+
+        .stat-tile{
+            background:var(--bg); border:1px solid var(--border); border-radius:10px;
+            padding:.9rem 1rem;
+        }
+        .stat-tile .stat-value{ font-family:'JetBrains Mono',monospace; font-size:1.35rem; font-weight:600; }
+        .stat-tile .stat-label{ font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+
+        .section-eyebrow{
+            font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--cyan);
+            text-transform:uppercase; letter-spacing:.08em;
+        }
+
+        .log-preview{
+            font-family:'JetBrains Mono',monospace; font-size:.78rem; color:#8fa3b0;
+            background:var(--bg); border:1px solid var(--border); border-radius:10px;
+            padding:1rem; max-height:220px; overflow-y:auto; white-space:pre-wrap;
+        }
+        .log-preview .hl-brute{ color:var(--red); }
+        .log-preview .hl-err{ color:var(--amber); }
+
+        .integrity-dot{ width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:.4rem; }
+
+        ::-webkit-scrollbar{ width:8px; height:8px; }
+        ::-webkit-scrollbar-track{ background:transparent; }
+        ::-webkit-scrollbar-thumb{ background:var(--border); border-radius:8px; }
+
+        .footer-note{ color:var(--muted); font-size:.76rem; }
+
+        @media (prefers-reduced-motion: reduce){
+            .pulse-dot, .module-nav .nav-link.active::after{ animation:none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar-suite py-3 mb-4">
+    <div class="container-xl d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-3">
+            <div class="brand-mark">
+                <i class="bi bi-shield-lock-fill"></i>
+            </div>
+            <div>
+                <div class="font-display fw-600" style="font-size:1.05rem;line-height:1.1;">security-utility-suite</div>
+                <div class="status-ticker">
+                    <span class="pulse-dot d-inline-block me-1"></span>
+                    sistem <span class="value">çevrimiçi</span> · 3 modül yüklü
+                </div>
+            </div>
+        </div>
+        <div class="status-ticker font-mono text-end">
+            <span id="clock">--:--:--</span><br>
+            <span class="text-muted">oturum: </span><span class="value">yerel</span>
+        </div>
+    </div>
+</nav>
+
+<div class="container-xl pb-5">
+
+    <ul class="nav module-nav" id="moduleTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-scanner-btn" data-bs-toggle="tab" data-bs-target="#tab-scanner" type="button" role="tab">
+                <i class="bi bi-hdd-network"></i> Ağ Tarayıcı
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-integrity-btn" data-bs-toggle="tab" data-bs-target="#tab-integrity" type="button" role="tab">
+                <i class="bi bi-fingerprint"></i> Dosya Bütünlüğü
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-logs-btn" data-bs-toggle="tab" data-bs-target="#tab-logs" type="button" role="tab">
+                <i class="bi bi-terminal"></i> Log Analizi
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+
+        <!-- ============================================================ -->
+        <!-- TAB 1 — PORT SCANNER (fonksiyonel)                            -->
+        <!-- ============================================================ -->
+        <div class="tab-pane fade show active tab-content-panel" id="tab-scanner" role="tabpanel">
+
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+                <div>
+                    <div class="section-eyebrow mb-1">MODÜL 01</div>
+                    <h5 class="font-display mb-1">Ağ Tarayıcı — Port Scanner</h5>
+                    <p class="text-muted mb-0" style="font-size:.88rem;">
+                        Belirtilen host için TCP-connect taraması yapar ve sonuçları veritabanına kaydeder.
+                    </p>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="card-suite p-3 p-lg-4">
+                        <form id="scanForm">
+                            <div class="mb-3">
+                                <label class="form-label" for="targetHost">Hedef Host</label>
+                                <input type="text" class="form-control font-mono" id="targetHost" placeholder="127.0.0.1 veya example.com" required>
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label" for="startPort">Başlangıç Portu</label>
+                                    <input type="number" class="form-control font-mono" id="startPort" min="1" max="65535" value="1" required>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label" for="endPort">Bitiş Portu</label>
+                                    <input type="number" class="form-control font-mono" id="endPort" min="1" max="65535" value="1024" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-scan w-100" id="scanBtn">
+                                <i class="bi bi-play-fill"></i> Taramayı Başlat
+                            </button>
+                            <div id="scanError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+                        </form>
+
+                        <div id="scanProgress" class="d-none mt-4 text-center">
+                            <div class="spinner-border" style="color:var(--cyan);width:2rem;height:2rem;" role="status"></div>
+                            <div class="text-muted mt-2" style="font-size:.82rem;">Portlar taranıyor…</div>
+                        </div>
+
+                        <div id="scanResultBox" class="d-none mt-4 pt-3" style="border-top:1px solid var(--border);">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted" style="font-size:.78rem;">SON TARAMA SONUCU</span>
+                                <span id="resultStatusBadge" class="badge-status"></span>
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <div class="stat-tile">
+                                        <div class="stat-value" id="resultOpenCount">0</div>
+                                        <div class="stat-label">Açık Port</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="stat-tile">
+                                        <div class="stat-value" id="resultDuration">0ms</div>
+                                        <div class="stat-label">Süre</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="resultPortsList"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="card-suite p-3 p-lg-4 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="font-display mb-0">Tarama Geçmişi</h6>
+                            <button class="btn btn-sm btn-outline-suite" id="refreshHistoryBtn">
+                                <i class="bi bi-arrow-clockwise"></i> Yenile
+                            </button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-suite mb-0">
+                                <thead>
+                                <tr>
+                                    <th>Host</th>
+                                    <th>Açık Portlar</th>
+                                    <th>Süre</th>
+                                    <th>Durum</th>
+                                    <th>Tarih</th>
+                                </tr>
+                                </thead>
+                                <tbody id="historyBody"></tbody>
+                            </table>
+                        </div>
+                        <div id="historyEmpty" class="empty-state d-none">
+                            <i class="bi bi-inbox d-block mb-2"></i>
+                            Henüz kayıtlı tarama yok. Soldaki formdan bir tarama başlatın.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- TAB 2 — FILE INTEGRITY VERIFIER (görsel taslak)               -->
+        <!-- ============================================================ -->
+        <div class="tab-pane fade tab-content-panel" id="tab-integrity" role="tabpanel">
+
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+                <div>
+                    <div class="section-eyebrow mb-1">MODÜL 02</div>
+                    <h5 class="font-display mb-1">Dosya Bütünlüğü — File Integrity Verifier</h5>
+                    <p class="text-muted mb-0" style="font-size:.88rem;">
+                        Dosyaların SHA-256 baseline hash'ini hesaplar ve sonraki taramalarda değişiklikleri tespit eder.
+                    </p>
+                </div>
+                <span class="badge-status badge-inprogress"><i class="bi bi-cone-striped"></i> Arayüz taslağı — backend yakında</span>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="card-suite p-3 p-lg-4">
+                        <label class="form-label" for="filePath">Dosya / Klasör Yolu</label>
+                        <input type="text" class="form-control font-mono mb-3" id="filePath" placeholder="/etc/nginx/nginx.conf">
+
+                        <div class="mb-3">
+                            <label class="form-label">Algoritma</label>
+                            <select class="form-select">
+                                <option selected>SHA-256</option>
+                                <option disabled>SHA-1 (önerilmez)</option>
+                                <option disabled>MD5 (önerilmez)</option>
+                            </select>
+                        </div>
+
+                        <button class="btn btn-scan w-100 mb-2" disabled>
+                            <i class="bi bi-fingerprint"></i> Baseline Hesapla
+                        </button>
+                        <button class="btn btn-outline-suite w-100" disabled>
+                            <i class="bi bi-search"></i> Değişiklikleri Kontrol Et
+                        </button>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="card-suite p-3 p-lg-4 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="font-display mb-0">İzlenen Dosyalar</h6>
+                            <span class="text-muted" style="font-size:.78rem;">örnek veri</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-suite mb-0">
+                                <thead>
+                                <tr>
+                                    <th>Dosya</th>
+                                    <th>SHA-256 (baseline)</th>
+                                    <th>Son Kontrol</th>
+                                    <th>Durum</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td class="font-mono">/etc/passwd</td>
+                                    <td class="font-mono text-truncate d-inline-block" style="max-width:220px;">1f3d9a...c72e</td>
+                                    <td class="text-muted">2 dk önce</td>
+                                    <td><span class="integrity-dot" style="background:var(--cyan);"></span>Değişmedi</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-mono">/etc/nginx/nginx.conf</td>
+                                    <td class="font-mono text-truncate d-inline-block" style="max-width:220px;">7bb210...9a4f</td>
+                                    <td class="text-muted">2 dk önce</td>
+                                    <td><span class="integrity-dot" style="background:var(--red);"></span>Değişti</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-mono">/var/www/index.html</td>
+                                    <td class="font-mono text-truncate d-inline-block" style="max-width:220px;">ac33e0...11d8</td>
+                                    <td class="text-muted">2 dk önce</td>
+                                    <td><span class="integrity-dot" style="background:var(--cyan);"></span>Değişmedi</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- TAB 3 — LOG ANALYZER (görsel taslak)                          -->
+        <!-- ============================================================ -->
+        <div class="tab-pane fade tab-content-panel" id="tab-logs" role="tabpanel">
+
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+                <div>
+                    <div class="section-eyebrow mb-1">MODÜL 03</div>
+                    <h5 class="font-display mb-1">Log Analizi — Log Analyzer</h5>
+                    <p class="text-muted mb-0" style="font-size:.88rem;">
+                        Log dosyalarını tarar; brute-force denemeleri, 404/500 hata yığılmalarını ve yetkisiz erişimleri işaretler.
+                    </p>
+                </div>
+                <span class="badge-status badge-inprogress"><i class="bi bi-cone-striped"></i> Arayüz taslağı — backend yakında</span>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-5">
+                    <div class="card-suite p-3 p-lg-4">
+                        <label class="form-label" for="logInput">Log İçeriği Yapıştır</label>
+                        <textarea class="form-control font-mono mb-3" id="logInput" rows="8" placeholder="192.168.1.14 - - [29/Jul/2026:10:12:03] &quot;POST /login HTTP/1.1&quot; 401 ..."></textarea>
+
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <div class="border-top flex-grow-1" style="border-color:var(--border)!important;"></div>
+                            <span class="text-muted" style="font-size:.76rem;">veya</span>
+                            <div class="border-top flex-grow-1" style="border-color:var(--border)!important;"></div>
+                        </div>
+
+                        <label class="form-label" for="logFile">Log Dosyası Yükle</label>
+                        <input type="file" class="form-control mb-3" id="logFile" disabled>
+
+                        <button class="btn btn-scan w-100" disabled>
+                            <i class="bi bi-search"></i> Logları Analiz Et
+                        </button>
+                    </div>
+                </div>
+
+                <div class="col-lg-7">
+                    <div class="row g-3 mb-3">
+                        <div class="col-4">
+                            <div class="stat-tile">
+                                <div class="stat-value" style="color:var(--red);">7</div>
+                                <div class="stat-label">Brute-Force</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-tile">
+                                <div class="stat-value" style="color:var(--amber);">142</div>
+                                <div class="stat-label">404 / 500</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-tile">
+                                <div class="stat-value" style="color:var(--cyan);">3</div>
+                                <div class="stat-label">Yetkisiz Erişim</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-suite p-3 p-lg-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="font-display mb-0">Örnek Bulgular</h6>
+                            <span class="text-muted" style="font-size:.78rem;">örnek veri</span>
+                        </div>
+                        <div class="log-preview">203.0.113.44 - - [29/Jul/2026:10:12:03] "POST /login HTTP/1.1" 401 512
+                            <span class="hl-brute">⚠ 203.0.113.44 için 15sn içinde 9 başarısız giriş denemesi — olası brute-force</span>
+                            198.51.100.7 - - [29/Jul/2026:10:12:07] "GET /wp-admin/ HTTP/1.1" 404 0
+                            <span class="hl-err">⚠ /wp-admin/ için tekrarlayan 404 — olası dizin tarama denemesi</span>
+                            203.0.113.44 - - [29/Jul/2026:10:12:11] "GET /admin/config HTTP/1.1" 403 128
+                            <span class="hl-brute">⚠ Yetkisiz erişim denemesi tespit edildi: /admin/config</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="footer-note text-center mt-4">
+        security-utility-suite · Yalnızca yetkili olduğunuz sistemler üzerinde kullanın.
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    (function(){
+        "use strict";
+
+        const API_BASE = "/api/v1/scan";
+
+        // ---- clock ----
+        function tickClock(){
+            document.getElementById("clock").textContent = new Date().toLocaleTimeString("tr-TR");
+        }
+        tickClock();
+        setInterval(tickClock, 1000);
+
+        // ---- helpers ----
+        function statusBadge(status){
+            const map = {
+                COMPLETED:  { cls: "badge-completed",  icon: "bi-check-circle",   label: "Tamamlandı" },
+                IN_PROGRESS:{ cls: "badge-inprogress", icon: "bi-hourglass-split",label: "Devam Ediyor" },
+                FAILED:     { cls: "badge-failed",     icon: "bi-x-circle",       label: "Başarısız" }
+            };
+            const s = map[status] || map.FAILED;
+            return `<span class="badge-status ${s.cls}"><i class="bi ${s.icon}"></i> ${s.label}</span>`;
+        }
+
+        function formatPorts(openPorts){
+            if (!openPorts) return '<span class="text-muted">—</span>';
+            const ports = String(openPorts).split(",").map(p => p.trim()).filter(Boolean);
+            if (ports.length === 0) return '<span class="text-muted">—</span>';
+            return ports.map(p => `<span class="port-chip">${p}</span>`).join(" ");
+        }
+
+        function formatDate(iso){
+            if (!iso) return "—";
+            const d = new Date(iso);
+            return d.toLocaleString("tr-TR");
+        }
+
+        // ---- scan form ----
+        const scanForm = document.getElementById("scanForm");
+        const scanBtn = document.getElementById("scanBtn");
+        const scanError = document.getElementById("scanError");
+        const scanProgress = document.getElementById("scanProgress");
+        const scanResultBox = document.getElementById("scanResultBox");
+
+        scanForm.addEventListener("submit", async function(e){
+            e.preventDefault();
+            scanError.textContent = "";
+            scanResultBox.classList.add("d-none");
+
+            const payload = {
+                targetHost: document.getElementById("targetHost").value.trim(),
+                startPort: parseInt(document.getElementById("startPort").value, 10),
+                endPort: parseInt(document.getElementById("endPort").value, 10)
+            };
+
+            scanBtn.disabled = true;
+            scanProgress.classList.remove("d-none");
+
+            try {
+                const res = await fetch(API_BASE, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    const errBody = await res.json().catch(() => ({}));
+                    const msg = errBody.fields
+                        ? Object.values(errBody.fields).join(" · ")
+                        : "Tarama başlatılamadı (" + res.status + ")";
+                    throw new Error(msg);
+                }
+
+                const result = await res.json();
+                renderScanResult(result);
+                loadHistory();
+            } catch (err) {
+                scanError.textContent = err.message || "Beklenmeyen bir hata oluştu.";
+            } finally {
+                scanBtn.disabled = false;
+                scanProgress.classList.add("d-none");
+            }
+        });
+
+        function renderScanResult(result){
+            document.getElementById("resultStatusBadge").outerHTML =
+                `<span id="resultStatusBadge">${statusBadge(result.status)}</span>`;
+            const ports = result.openPorts ? String(result.openPorts).split(",").filter(Boolean) : [];
+            document.getElementById("resultOpenCount").textContent = ports.length;
+            document.getElementById("resultDuration").textContent = (result.scanDurationMs ?? 0) + "ms";
+            document.getElementById("resultPortsList").innerHTML = formatPorts(result.openPorts);
+            scanResultBox.classList.remove("d-none");
+        }
+
+        // ---- history table ----
+        const historyBody = document.getElementById("historyBody");
+        const historyEmpty = document.getElementById("historyEmpty");
+
+        async function loadHistory(){
+            try {
+                const res = await fetch(API_BASE + "/history?page=0&size=20");
+                if (!res.ok) throw new Error("Geçmiş alınamadı");
+                const page = await res.json();
+                const items = page.content || [];
+
+                if (items.length === 0) {
+                    historyBody.innerHTML = "";
+                    historyEmpty.classList.remove("d-none");
+                    return;
+                }
+                historyEmpty.classList.add("d-none");
+
+                historyBody.innerHTML = items.map(item => `
+        <tr>
+          <td class="font-mono">${item.targetHost ?? "—"}</td>
+          <td>${formatPorts(item.openPorts)}</td>
+          <td class="font-mono">${item.scanDurationMs != null ? item.scanDurationMs + "ms" : "—"}</td>
+          <td>${statusBadge(item.status)}</td>
+          <td class="text-muted">${formatDate(item.createdAt)}</td>
+        </tr>
+      `).join("");
+            } catch (err) {
+                historyBody.innerHTML = "";
+                historyEmpty.classList.remove("d-none");
+            }
+        }
+
+        document.getElementById("refreshHistoryBtn").addEventListener("click", loadHistory);
+
+        // initial load
+        loadHistory();
+    })();
+</script>
+</body>
+</html>

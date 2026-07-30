@@ -28,7 +28,7 @@ dependencies {
 
     // VERİ TABANI VE JPA İÇİN EKLENENLER:
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    runtimeOnly 'com.microsoft.sqlserver:mssql-jdbc'
+    runtimeOnly 'com.h2database:h2'
 
     // Lombok Konfigürasyonun
     compileOnly 'org.projectlombok:lombok'
