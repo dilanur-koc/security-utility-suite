@@ -13,3 +13,6 @@ desktop.ini
 .env
 application-local.yml
 application-secrets.yml
+.gradle/
+.idea/
+build/
