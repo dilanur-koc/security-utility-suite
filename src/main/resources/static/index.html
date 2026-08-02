@@ -90,7 +90,6 @@
     border-color:var(--border);
     position:relative;
   }
-  /* signature: scanning sweep line on the active module tab */
   .module-nav .nav-link.active::after{
     content:"";
     position:absolute; left:8px; right:8px; top:-1px; height:2px;
@@ -162,7 +161,9 @@
   .table-suite tbody tr:hover{ background:rgba(47,216,200,.04); }
 
   .empty-state{ color:var(--muted); text-align:center; padding:2.5rem 1rem; }
+  .empty-state.compact{ padding:1.25rem .5rem; }
   .empty-state .bi{ font-size:1.8rem; color:var(--border); }
+  .empty-state.compact .bi{ font-size:1.3rem; }
 
   .stat-tile{
     background:var(--bg); border:1px solid var(--border); border-radius:10px;
@@ -175,16 +176,78 @@
     font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--cyan);
     text-transform:uppercase; letter-spacing:.08em;
   }
-
-  .log-preview{
-    font-family:'JetBrains Mono',monospace; font-size:.78rem; color:#8fa3b0;
-    background:var(--bg); border:1px solid var(--border); border-radius:10px;
-    padding:1rem; max-height:220px; overflow-y:auto; white-space:pre-wrap;
+  .stats-eyebrow{
+    font-family:'JetBrains Mono',monospace; font-size:.68rem; color:var(--muted);
+    text-transform:uppercase; letter-spacing:.08em;
   }
-  .log-preview .hl-brute{ color:var(--red); }
-  .log-preview .hl-err{ color:var(--amber); }
+
+  .alerts-table-scroll{ max-height:340px; overflow-y:auto; }
+  .table-striped-suite tbody tr:nth-child(even){ background:rgba(255,255,255,.022); }
+  .raw-log-cell{
+    max-width:240px; display:inline-block; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; vertical-align:middle;
+    color:#8fa3b0; cursor:help;
+  }
+  .threat-chip{
+    font-family:'JetBrains Mono',monospace; font-weight:500; font-size:.72rem;
+    padding:.3em .55em; border-radius:6px; white-space:nowrap;
+  }
 
   .integrity-dot{ width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:.4rem; }
+
+  /* ---------- Divider between functional section and its stats ---------- */
+  .stats-divider{
+    display:flex; align-items:center; gap:.75rem; margin:2rem 0 1.25rem;
+  }
+  .stats-divider::before, .stats-divider::after{
+    content:""; flex:1; height:1px; background:var(--border);
+  }
+  .stats-divider .stats-divider-label{
+    font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:.85rem;
+    color:var(--text); white-space:nowrap; display:flex; align-items:center; gap:.4rem;
+  }
+
+  /* ---------- Donut charts (categorical distributions) ---------- */
+  .donut-wrap{ display:flex; align-items:center; gap:1.25rem; flex-wrap:wrap; }
+  .donut{
+    position:relative; width:128px; height:128px; border-radius:50%; flex-shrink:0;
+  }
+  .donut::after{
+    content:""; position:absolute; inset:20px; border-radius:50%;
+    background:var(--surface-alt);
+  }
+  .donut-center{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; z-index:1;
+  }
+  .donut-center .donut-total{ font-family:'JetBrains Mono',monospace; font-size:1.15rem; font-weight:600; }
+  .donut-center .donut-total-label{ font-size:.62rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+
+  .donut-legend{ flex:1; min-width:150px; }
+  .legend-row{
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:.82rem; padding:.28rem 0;
+  }
+  .legend-row + .legend-row{ border-top:1px solid var(--border); }
+  .legend-dot{ width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:.5rem; flex-shrink:0; }
+  .legend-name{ display:flex; align-items:center; color:var(--text); }
+  .legend-meta{ font-family:'JetBrains Mono',monospace; color:var(--muted); font-size:.78rem; }
+  .legend-meta .pct{ color:var(--text); font-weight:600; margin-right:.4rem; }
+
+  /* ---------- Frequency bars (open-ended lists: hosts / ports / ips) ---------- */
+  .freq-row{ margin-bottom:.7rem; }
+  .freq-row:last-child{ margin-bottom:0; }
+  .freq-row-head{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size:.82rem; margin-bottom:.28rem;
+  }
+  .freq-row-head .freq-label{ color:var(--text); font-weight:500; font-family:'JetBrains Mono',monospace; }
+  .freq-row-head .freq-count{ font-family:'JetBrains Mono',monospace; color:var(--muted); }
+  .freq-track{
+    background:var(--bg); border:1px solid var(--border); border-radius:6px;
+    height:8px; overflow:hidden;
+  }
+  .freq-fill{ height:100%; border-radius:6px; background:var(--cyan); transition:width .4s ease; }
 
   ::-webkit-scrollbar{ width:8px; height:8px; }
   ::-webkit-scrollbar-track{ background:transparent; }
@@ -243,7 +306,7 @@
   <div class="tab-content">
 
     <!-- ============================================================ -->
-    <!-- TAB 1 — PORT SCANNER (fonksiyonel)                            -->
+    <!-- TAB 1 — PORT SCANNER (fonksiyonel + istatistikler)            -->
     <!-- ============================================================ -->
     <div class="tab-pane fade show active tab-content-panel" id="tab-scanner" role="tabpanel">
 
@@ -340,10 +403,43 @@
           </div>
         </div>
       </div>
+
+      <!-- --- İstatistikler: tarama geçmişinden frekans analizi --- -->
+      <div class="stats-divider">
+        <span class="stats-divider-label"><i class="bi bi-bar-chart-line"></i> Tarama İstatistikleri</span>
+      </div>
+
+      <div class="row g-4">
+        <div class="col-lg-6">
+          <div class="card-suite p-3 p-lg-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-display mb-0">En Sık Taranan Host'lar</h6>
+              <span class="stats-eyebrow">geçmişten</span>
+            </div>
+            <div id="topHostsFreq"></div>
+            <div id="topHostsEmpty" class="empty-state compact d-none">
+              <i class="bi bi-inbox d-block mb-1"></i>Henüz tarama yok.
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="card-suite p-3 p-lg-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-display mb-0">En Sık Açık Bulunan Portlar</h6>
+              <span class="stats-eyebrow">geçmişten</span>
+            </div>
+            <div id="topPortsFreq"></div>
+            <div id="topPortsEmpty" class="empty-state compact d-none">
+              <i class="bi bi-inbox d-block mb-1"></i>Henüz tarama yok.
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ============================================================ -->
-    <!-- TAB 2 — FILE INTEGRITY VERIFIER (fonksiyonel)                 -->
+    <!-- TAB 2 — FILE INTEGRITY VERIFIER (fonksiyonel + istatistikler) -->
     <!-- ============================================================ -->
     <div class="tab-pane fade tab-content-panel" id="tab-integrity" role="tabpanel">
 
@@ -412,10 +508,48 @@
           </div>
         </div>
       </div>
+
+      <!-- --- İstatistikler: durum dağılımı + riskli dosyalar --- -->
+      <div class="stats-divider">
+        <span class="stats-divider-label"><i class="bi bi-bar-chart-line"></i> Bütünlük İstatistikleri</span>
+      </div>
+
+      <div class="row g-4">
+        <div class="col-lg-5">
+          <div class="card-suite p-3 p-lg-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-display mb-0">Durum Dağılımı</h6>
+              <span class="stats-eyebrow">tüm dosyalar</span>
+            </div>
+            <div id="integrityDonutWrap" class="donut-wrap"></div>
+            <div id="integrityDistEmpty" class="empty-state compact d-none">
+              <i class="bi bi-inbox d-block mb-1"></i>Henüz izlenen dosya yok.
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-7">
+          <div class="card-suite p-3 p-lg-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-display mb-0">Riskli Dosyalar</h6>
+              <span class="stats-eyebrow">değişti / bulunamadı</span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead><tr><th>Dosya</th><th>Durum</th><th>Son Kontrol</th></tr></thead>
+                <tbody id="riskyFilesBody"></tbody>
+              </table>
+            </div>
+            <div id="riskyFilesEmpty" class="empty-state compact d-none">
+              <i class="bi bi-inbox d-block mb-1"></i>Değişen/kayıp dosya yok.
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ============================================================ -->
-    <!-- TAB 3 — LOG ANALYZER (fonksiyonel)                            -->
+    <!-- TAB 3 — LOG ANALYZER (fonksiyonel + istatistikler)            -->
     <!-- ============================================================ -->
     <div class="tab-pane fade tab-content-panel" id="tab-logs" role="tabpanel">
 
@@ -488,10 +622,87 @@
                 <i class="bi bi-arrow-clockwise"></i> Yenile
               </button>
             </div>
-            <div class="log-preview" id="alertsPreview"></div>
+            <div class="table-responsive alerts-table-scroll">
+              <table class="table table-suite table-striped-suite mb-0">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>IP Adresi</th>
+                    <th>Tehdit Türü</th>
+                    <th>Önem</th>
+                    <th>Kaynak</th>
+                    <th>Ham Log</th>
+                  </tr>
+                </thead>
+                <tbody id="alertsBody"></tbody>
+              </table>
+            </div>
             <div id="alertsEmpty" class="empty-state d-none">
               <i class="bi bi-inbox d-block mb-2"></i>
               Henüz bulgu yok. Soldan log yapıştırıp analiz edin.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- --- İstatistikler: önem derecesi + tehdit türü dağılımı, riskli IP ve son uyarılar --- -->
+      <div class="stats-divider">
+        <span class="stats-divider-label"><i class="bi bi-bar-chart-line"></i> Log İstatistikleri</span>
+      </div>
+
+      <div class="row g-4">
+        <div class="col-lg-6">
+          <div class="card-suite p-3 p-lg-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-display mb-0">Önem Derecesi Dağılımı</h6>
+              <span class="stats-eyebrow">tüm uyarılar</span>
+            </div>
+            <div id="severityDonutWrap" class="donut-wrap"></div>
+            <div id="severityEmpty" class="empty-state compact d-none">
+              <i class="bi bi-inbox d-block mb-1"></i>Henüz log uyarısı yok.
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="card-suite p-3 p-lg-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-display mb-0">Tehdit Türü Dağılımı</h6>
+              <span class="stats-eyebrow">tüm uyarılar</span>
+            </div>
+            <div id="threatTypeDonutWrap" class="donut-wrap"></div>
+            <div id="threatTypeEmpty" class="empty-state compact d-none">
+              <i class="bi bi-inbox d-block mb-1"></i>Henüz log uyarısı yok.
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="card-suite p-3 p-lg-4 h-100">
+            <h6 class="font-display mb-3">En Riskli IP'ler</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead><tr><th>IP Adresi</th><th>Uyarı Sayısı</th></tr></thead>
+                <tbody id="riskyIpsBody"></tbody>
+              </table>
+            </div>
+            <div id="riskyIpsEmpty" class="empty-state compact d-none">
+              <i class="bi bi-inbox d-block mb-1"></i>Henüz veri yok.
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="card-suite p-3 p-lg-4 h-100">
+            <h6 class="font-display mb-3">Son Kritik / Yüksek Öncelikli Uyarılar</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead><tr><th>IP</th><th>Tehdit</th><th>Önem</th><th>Tarih</th></tr></thead>
+                <tbody id="recentAlertsBody"></tbody>
+              </table>
+            </div>
+            <div id="recentAlertsEmpty" class="empty-state compact d-none">
+              <i class="bi bi-inbox d-block mb-1"></i>Kritik/yüksek öncelikli uyarı yok.
             </div>
           </div>
         </div>
@@ -543,6 +754,34 @@
     return d.toLocaleString("tr-TR");
   }
 
+  function escapeHtml(str){
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ---- shared label / color maps (used by findings table + stats donuts) ----
+  const SEVERITY_COLOR = {
+    LOW: "#2fd8c8", MEDIUM: "#f0a93b", HIGH: "#f0a93b", CRITICAL: "#e5484d"
+  };
+  const SEVERITY_LABEL = {
+    LOW: "Düşük", MEDIUM: "Orta", HIGH: "Yüksek", CRITICAL: "Kritik"
+  };
+  const THREAT_LABEL = {
+    BRUTE_FORCE: "Brute-Force", SUSPICIOUS_ACTIVITY: "Şüpheli Aktivite",
+    SQL_INJECTION: "SQL Enjeksiyonu", XSS: "XSS"
+  };
+  const THREAT_COLOR = {
+    BRUTE_FORCE: "#e5484d", SUSPICIOUS_ACTIVITY: "#f0a93b",
+    SQL_INJECTION: "#c23b8f", XSS: "#2fd8c8"
+  };
+  const INTEGRITY_COLOR = {
+    UNCHANGED: "#2fd8c8", MODIFIED: "#e5484d", MISSING: "#8a3ffc", BASELINE_ONLY: "#f0a93b"
+  };
+  const INTEGRITY_LABEL = {
+    UNCHANGED: "Değişmedi", MODIFIED: "Değişti", MISSING: "Bulunamadı", BASELINE_ONLY: "Baseline alındı"
+  };
+
   // ---- scan form ----
   const scanForm = document.getElementById("scanForm");
   const scanBtn = document.getElementById("scanBtn");
@@ -582,6 +821,7 @@
       const result = await res.json();
       renderScanResult(result);
       loadHistory();
+      loadDashboardStats();
     } catch (err) {
       scanError.textContent = err.message || "Beklenmeyen bir hata oluştu.";
     } finally {
@@ -635,7 +875,6 @@
 
   document.getElementById("refreshHistoryBtn").addEventListener("click", loadHistory);
 
-  // initial load
   loadHistory();
 
   // ================================================================
@@ -712,6 +951,7 @@
       const res = await fetch(`${INTEGRITY_API}/check/${id}`, { method: "POST" });
       if (!res.ok) throw new Error("Kontrol başarısız");
       loadIntegrityFiles();
+      loadDashboardStats();
     } catch (err) {
       console.error(err);
     }
@@ -722,6 +962,7 @@
       const res = await fetch(`${INTEGRITY_API}/files/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Silme başarısız");
       loadIntegrityFiles();
+      loadDashboardStats();
     } catch (err) {
       console.error(err);
     }
@@ -751,6 +992,7 @@
 
       document.getElementById("filePath").value = "";
       loadIntegrityFiles();
+      loadDashboardStats();
     } catch (err) {
       baselineError.textContent = err.message || "Beklenmeyen bir hata oluştu.";
     } finally {
@@ -764,6 +1006,7 @@
       const res = await fetch(INTEGRITY_API + "/check-all", { method: "POST" });
       if (!res.ok) throw new Error("Toplu kontrol başarısız");
       loadIntegrityFiles();
+      loadDashboardStats();
     } catch (err) {
       console.error(err);
     } finally {
@@ -780,40 +1023,47 @@
   // ================================================================
   const LOGS_API = "/api/v1/logs";
 
-  const THREAT_META = {
-    BRUTE_FORCE:         { cls: "hl-brute", label: "Brute-Force" },
-    SUSPICIOUS_ACTIVITY: { cls: "hl-err",   label: "Şüpheli Aktivite" },
-    SQL_INJECTION:       { cls: "hl-brute", label: "SQL Enjeksiyonu" },
-    XSS:                 { cls: "hl-err",   label: "XSS" }
-  };
-
   const logAnalyzeForm = document.getElementById("logAnalyzeForm");
   const analyzeBtn = document.getElementById("analyzeBtn");
   const analyzeError = document.getElementById("analyzeError");
   const logFileInput = document.getElementById("logFile");
-  const alertsPreview = document.getElementById("alertsPreview");
+  const alertsBody = document.getElementById("alertsBody");
   const alertsEmpty = document.getElementById("alertsEmpty");
 
-  function escapeHtml(str){
-    const div = document.createElement("div");
-    div.textContent = str;
-    return div.innerHTML;
+  function threatChip(threatType){
+    const label = THREAT_LABEL[threatType] || threatType || "—";
+    const color = THREAT_COLOR[threatType] || "var(--cyan)";
+    return `<span class="threat-chip" style="background:${color}22;color:${color};">${label}</span>`;
+  }
+
+  function severityBadge(severity){
+    const label = SEVERITY_LABEL[severity] || severity || "—";
+    const color = SEVERITY_COLOR[severity] || "var(--cyan)";
+    return `<span class="badge-status" style="background:${color}22;color:${color};">${label}</span>`;
   }
 
   function renderAlerts(alerts){
     if (!alerts || alerts.length === 0) {
-      alertsPreview.innerHTML = "";
+      alertsBody.innerHTML = "";
       alertsEmpty.classList.remove("d-none");
       updateStats([]);
       return;
     }
     alertsEmpty.classList.add("d-none");
 
-    alertsPreview.innerHTML = alerts.map(a => {
-      const meta = THREAT_META[a.threatType] || { cls: "hl-err", label: a.threatType };
-      const rawLines = escapeHtml(a.rawLog || "").split("\n").join("\n");
-      return `${rawLines}\n<span class="${meta.cls}">⚠ [${meta.label} / ${a.severity}] IP: ${a.ipAddress || "—"}</span>\n`;
-    }).join("\n");
+    alertsBody.innerHTML = alerts.map(a => {
+      const rawLog = escapeHtml((a.rawLog || "").replace(/\s+/g, " ").trim());
+      return `
+        <tr>
+          <td class="text-muted">${formatDate(a.detectedAt)}</td>
+          <td class="font-mono">${a.ipAddress || "—"}</td>
+          <td>${threatChip(a.threatType)}</td>
+          <td>${severityBadge(a.severity)}</td>
+          <td class="font-mono">${a.logSource || "—"}</td>
+          <td><span class="raw-log-cell font-mono" title="${rawLog}">${rawLog || "—"}</span></td>
+        </tr>
+      `;
+    }).join("");
 
     updateStats(alerts);
   }
@@ -889,6 +1139,7 @@
       }
 
       loadAlertHistory();
+      loadDashboardStats();
     } catch (err) {
       analyzeError.textContent = err.message || "Beklenmeyen bir hata oluştu.";
     } finally {
@@ -899,6 +1150,166 @@
   document.getElementById("refreshAlertsBtn").addEventListener("click", loadAlertHistory);
 
   loadAlertHistory();
+
+  // ================================================================
+  // DASHBOARD STATS  (GET /api/stats/dashboard) — embedded per tab
+  // ================================================================
+  const STATS_API = "/api/stats/dashboard";
+
+  // Renders a donut (conic-gradient) + legend into two sibling containers.
+  function renderDonut(wrapId, emptyId, items, keyFn, labelMap, colorMap, totalLabel){
+    const wrap = document.getElementById(wrapId);
+    const empty = document.getElementById(emptyId);
+
+    if (!items || items.length === 0) {
+      wrap.innerHTML = "";
+      empty.classList.remove("d-none");
+      return;
+    }
+    empty.classList.add("d-none");
+
+    const total = items.reduce((sum, i) => sum + i.count, 0);
+    let cursor = 0;
+    const stops = [];
+    items.forEach(i => {
+      const key = keyFn(i);
+      const color = colorMap[key] || "#2fd8c8";
+      const start = (cursor / total) * 360;
+      cursor += i.count;
+      const end = (cursor / total) * 360;
+      stops.push(`${color} ${start}deg ${end}deg`);
+    });
+
+    const legendRows = items.map(i => {
+      const key = keyFn(i);
+      const label = labelMap[key] || key;
+      const color = colorMap[key] || "#2fd8c8";
+      const pct = total > 0 ? Math.round((i.count / total) * 100) : 0;
+      return `
+        <div class="legend-row">
+          <span class="legend-name"><span class="legend-dot" style="background:${color};"></span>${label}</span>
+          <span class="legend-meta"><span class="pct">${pct}%</span>${i.count}</span>
+        </div>
+      `;
+    }).join("");
+
+    wrap.innerHTML = `
+      <div class="donut" style="background:conic-gradient(${stops.join(",")});">
+        <div class="donut-center">
+          <div class="donut-total">${total}</div>
+          <div class="donut-total-label">${totalLabel}</div>
+        </div>
+      </div>
+      <div class="donut-legend">${legendRows}</div>
+    `;
+  }
+
+  // Renders a simple ranked frequency list (host/port/ip counts) as bars.
+  function renderFreqList(containerId, emptyId, items, labelFn){
+    const container = document.getElementById(containerId);
+    const empty = document.getElementById(emptyId);
+
+    if (!items || items.length === 0) {
+      container.innerHTML = "";
+      empty.classList.remove("d-none");
+      return;
+    }
+    empty.classList.add("d-none");
+
+    const max = Math.max(...items.map(i => i.count), 1);
+    container.innerHTML = items.map(i => {
+      const pct = Math.round((i.count / max) * 100);
+      return `
+        <div class="freq-row">
+          <div class="freq-row-head">
+            <span class="freq-label">${labelFn(i)}</span>
+            <span class="freq-count">${i.count}</span>
+          </div>
+          <div class="freq-track"><div class="freq-fill" style="width:${pct}%;"></div></div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderRiskyIps(items){
+    const body = document.getElementById("riskyIpsBody");
+    const empty = document.getElementById("riskyIpsEmpty");
+    if (!items || items.length === 0) {
+      body.innerHTML = "";
+      empty.classList.remove("d-none");
+      return;
+    }
+    empty.classList.add("d-none");
+    body.innerHTML = items.map(i => `
+      <tr><td class="font-mono">${i.ipAddress}</td><td class="font-mono">${i.count}</td></tr>
+    `).join("");
+  }
+
+  function renderRecentAlerts(items){
+    const body = document.getElementById("recentAlertsBody");
+    const empty = document.getElementById("recentAlertsEmpty");
+    if (!items || items.length === 0) {
+      body.innerHTML = "";
+      empty.classList.remove("d-none");
+      return;
+    }
+    empty.classList.add("d-none");
+    body.innerHTML = items.map(a => `
+      <tr>
+        <td class="font-mono">${a.ipAddress || "—"}</td>
+        <td>${THREAT_LABEL[a.threatType] || a.threatType}</td>
+        <td><span class="badge-status" style="background:${SEVERITY_COLOR[a.severity]}22;color:${SEVERITY_COLOR[a.severity]};">${SEVERITY_LABEL[a.severity] || a.severity}</span></td>
+        <td class="text-muted">${formatDate(a.detectedAt)}</td>
+      </tr>
+    `).join("");
+  }
+
+  function renderRiskyFiles(items){
+    const body = document.getElementById("riskyFilesBody");
+    const empty = document.getElementById("riskyFilesEmpty");
+    if (!items || items.length === 0) {
+      body.innerHTML = "";
+      empty.classList.remove("d-none");
+      return;
+    }
+    empty.classList.add("d-none");
+    body.innerHTML = items.map(f => `
+      <tr>
+        <td class="font-mono">${f.filePath}</td>
+        <td><span class="integrity-dot" style="background:${INTEGRITY_COLOR[f.status]};"></span>${INTEGRITY_LABEL[f.status] || f.status}</td>
+        <td class="text-muted">${formatDate(f.lastCheckedAt)}</td>
+      </tr>
+    `).join("");
+  }
+
+  async function loadDashboardStats(){
+    try {
+      const res = await fetch(STATS_API);
+      if (!res.ok) throw new Error("İstatistikler alınamadı (" + res.status + ")");
+      const data = await res.json();
+
+      // Tab 1 — Scanner
+      renderFreqList("topHostsFreq", "topHostsEmpty", data.topScannedHosts, i => i.targetHost);
+      renderFreqList("topPortsFreq", "topPortsEmpty", data.topOpenPorts, i => "Port " + i.port);
+
+      // Tab 2 — Integrity
+      renderDonut("integrityDonutWrap", "integrityDistEmpty", data.integrityStatusDistribution,
+        i => i.status, INTEGRITY_LABEL, INTEGRITY_COLOR, "dosya");
+      renderRiskyFiles(data.riskyFiles);
+
+      // Tab 3 — Logs
+      renderDonut("severityDonutWrap", "severityEmpty", data.severityDistribution,
+        i => i.severity, SEVERITY_LABEL, SEVERITY_COLOR, "uyarı");
+      renderDonut("threatTypeDonutWrap", "threatTypeEmpty", data.threatTypeDistribution,
+        i => i.threatType, THREAT_LABEL, THREAT_COLOR, "uyarı");
+      renderRiskyIps(data.topRiskyIps);
+      renderRecentAlerts(data.recentCriticalAlerts);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  loadDashboardStats();
 })();
 </script>
 </body>
