@@ -9,6 +9,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -179,9 +181,14 @@ public class LogAnalyzerService {
         for (ParsedLine line : lines) {
             // Parse edilemeyen satirlarda path "" (bos string) olarak gelir — null degil.
             // Bu yuzden null kontrolu yeterli degil; isBlank() ile ham satira dusuyoruz.
-            String haystack = (line.path() == null || line.path().isBlank())
+            String candidate = (line.path() == null || line.path().isBlank())
                     ? line.raw()
                     : line.path();
+
+            // Gercek loglarda saldiri payload'lari URL-encoded gelir: bosluklar
+            // %20 veya + olur. Imza regex'leri ise \s (bosluk) bekliyor. Decode
+            // etmeden "union%20select" gibi klasik saldirilar hic yakalanmiyordu.
+            String haystack = safeUrlDecode(candidate);
 
             if (SQLI_PATTERN.matcher(haystack).find()) {
                 alerts.add(buildAlert(
@@ -216,6 +223,23 @@ public class LogAnalyzerService {
                 .severity(severity)
                 .rawLog(summary + "\n" + rawLog)
                 .build();
+    }
+
+    /**
+     * URL-decode eder; bozuk yuzde dizileri (orn. tek basina "%" veya "%zz")
+     * loglarda sik gorulur ve {@link URLDecoder} bunlarda
+     * {@link IllegalArgumentException} firlatir. Boyle bir durumda metni
+     * oldugu gibi dondururuz — tespit yapmamak, patlamaktan iyidir.
+     */
+    private String safeUrlDecode(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        try {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException ex) {
+            return value;
+        }
     }
 
     private String sampleRawLogs(List<ParsedLine> lines, java.util.function.Predicate<ParsedLine> filter) {
