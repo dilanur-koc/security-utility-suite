@@ -57,12 +57,16 @@ public class FileIntegrityService {
                 .orElseThrow(() -> new NoSuchElementException(
                         "Dosya okunamadı veya bulunamadı: " + filePath));
 
-        FileIntegrityRecord record = repository.findByFilePath(filePath)
-                .orElseGet(() -> new FileIntegrityRecord(filePath, ALGORITHM, hash));
-
-        // If re-baselining an existing record, reset it to a fresh baseline.
-        record = new FileIntegrityRecord(filePath, ALGORITHM, hash);
-        return repository.save(record);
+        // Ayni yol daha once takip ediliyorsa YENI satir acmak yerine mevcut
+        // kaydin baseline'ini yerinde sifirla — aksi halde her yeniden
+        // baseline'da tabloda mukerrer satir olusuyordu.
+        return repository.findByFilePath(filePath)
+                .map(existing -> {
+                    existing.resetBaseline(hash);
+                    return repository.save(existing);
+                })
+                .orElseGet(() -> repository.save(
+                        new FileIntegrityRecord(filePath, ALGORITHM, hash)));
     }
 
     /**

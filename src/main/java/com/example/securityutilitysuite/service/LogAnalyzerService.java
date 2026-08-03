@@ -177,7 +177,11 @@ public class LogAnalyzerService {
         List<SecurityLogAlert> alerts = new ArrayList<>();
 
         for (ParsedLine line : lines) {
-            String haystack = line.path() != null ? line.path() : line.raw();
+            // Parse edilemeyen satirlarda path "" (bos string) olarak gelir — null degil.
+            // Bu yuzden null kontrolu yeterli degil; isBlank() ile ham satira dusuyoruz.
+            String haystack = (line.path() == null || line.path().isBlank())
+                    ? line.raw()
+                    : line.path();
 
             if (SQLI_PATTERN.matcher(haystack).find()) {
                 alerts.add(buildAlert(

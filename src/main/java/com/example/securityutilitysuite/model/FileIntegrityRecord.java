@@ -64,6 +64,18 @@ public class FileIntegrityRecord {
         this.status = IntegrityStatus.BASELINE_ONLY;
     }
 
+    /**
+     * Mevcut kaydin baseline'ini yerinde sifirlar (kasitli/mesru bir dosya
+     * degisikliginden sonra kullanilir). Satirin id'si korunur, boylece
+     * ayni yol icin mukerrer kayit olusmaz.
+     */
+    public void resetBaseline(String newBaselineHash) {
+        this.baselineHash = newBaselineHash;
+        this.currentHash = newBaselineHash;
+        this.status = IntegrityStatus.BASELINE_ONLY;
+        this.lastCheckedAt = null;
+    }
+
     @PrePersist
     void onCreate() {
         if (this.baselineCreatedAt == null) {
