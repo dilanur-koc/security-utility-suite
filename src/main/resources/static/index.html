@@ -961,6 +961,166 @@
     </p>
   </div>
 
+
+
+  <!-- ==================== SUBNET & MAC ANALYZER ==================== -->
+  <div id="ws-subnet" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="card-suite p-3 p-lg-4">
+          <form id="subnetForm">
+            <div class="mb-3">
+              <label class="form-label" for="subnetCidr">CIDR Bloğu</label>
+              <input type="text" class="form-control font-mono" id="subnetCidr"
+                     placeholder="192.168.1.0/24" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="subnetMac">MAC Adresi <span class="text-muted">(isteğe bağlı)</span></label>
+              <input type="text" class="form-control font-mono" id="subnetMac"
+                     placeholder="00:1A:2B:3C:4D:5E">
+            </div>
+            <button type="submit" class="btn btn-scan w-100" id="subnetBtn">
+              <i class="bi bi-diagram-3"></i> Hesapla
+            </button>
+            <div id="subnetError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+          </form>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div id="subnetEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-diagram-3 d-block mb-2"></i>
+            Hesaplamak istediğiniz CIDR bloğunu soldan girin.
+          </div>
+        </div>
+
+        <div id="subnetResult" class="d-none">
+          <div class="row g-3 mb-3">
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="subUsable" style="font-size:1.1rem;">—</div>
+                <div class="stat-label">Kullanılabilir Host</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="subTotal" style="font-size:1.1rem;">—</div>
+                <div class="stat-label">Toplam Adres</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="subScope" style="font-size:.9rem;">—</div>
+                <div class="stat-label">Kapsam</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">Ağ Bilgileri</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0"><tbody id="subnetDetails"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3 d-none" id="subnetMacCard">
+            <h6 class="font-display mb-3">MAC Analizi</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0"><tbody id="subnetMacDetails"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <h6 class="font-display mb-3">Bulgular</h6>
+            <div id="subnetFindings"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== DNS QUERY RESOLVER ==================== -->
+  <div id="ws-dns" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="card-suite p-3 p-lg-4">
+          <form id="dnsForm">
+            <div class="mb-3">
+              <label class="form-label" for="dnsDomain">Alan Adı</label>
+              <input type="text" class="form-control font-mono" id="dnsDomain"
+                     placeholder="example.com" required>
+            </div>
+            <div class="form-check mb-3">
+              <input class="form-check-input" type="checkbox" id="dnsSpoof" checked>
+              <label class="form-check-label" for="dnsSpoof" style="font-size:.82rem;">
+                Spoofing kontrolü yap
+              </label>
+              <div class="text-muted" style="font-size:.72rem;line-height:1.4;">
+                Aynı sorgu Google, Cloudflare ve Quad9'a ayrı ayrı sorulup yanıtlar karşılaştırılır.
+              </div>
+            </div>
+            <button type="submit" class="btn btn-scan w-100" id="dnsBtn">
+              <i class="bi bi-globe2"></i> Sorgula
+            </button>
+            <div id="dnsError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+          </form>
+
+          <div id="dnsProgress" class="d-none mt-4 text-center">
+            <div class="spinner-border" style="color:var(--cyan);width:2rem;height:2rem;" role="status"></div>
+            <div class="text-muted mt-2" style="font-size:.82rem;">Çözümleyicilere soruluyor…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div id="dnsEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-globe2 d-block mb-2"></i>
+            Sorgulamak istediğiniz alan adını soldan girin.
+          </div>
+        </div>
+
+        <div id="dnsResult" class="d-none">
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">Bulgular</h6>
+            <div id="dnsFindings"></div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3" id="dnsResolverCard">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-display mb-0">Çözümleyici Karşılaştırması</h6>
+              <span id="dnsConsistency" class="badge-status"></span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead><tr><th>Çözümleyici</th><th>A Kayıtları</th><th>Süre</th></tr></thead>
+                <tbody id="dnsResolvers"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">DNS Kayıtları</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0"><tbody id="dnsRecords"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4" id="dnsReverseCard">
+            <h6 class="font-display mb-3">Ters DNS (PTR)</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead><tr><th>IP</th><th>PTR</th><th>İleri Doğrulama</th></tr></thead>
+                <tbody id="dnsReverse"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== SSL/TLS INSPECTOR ==================== -->
   <div id="ws-ssl" class="d-none">
     <div class="row g-4">
@@ -1144,7 +1304,8 @@
         const errBody = await res.json().catch(() => ({}));
         const msg = errBody.fields
           ? Object.values(errBody.fields).join(" · ")
-          : "Tarama başlatılamadı (" + res.status + ")";
+          : (errBody.message || errBody.error
+             || "Tarama başlatılamadı (" + res.status + "). Hedef host alanına port yazmayın.");
         throw new Error(msg);
       }
 
@@ -1827,7 +1988,7 @@ function closeSidebar(){
         const body = await res.json().catch(function(){ return {}; });
         const msg = body.fields
           ? Object.values(body.fields).join(" · ")
-          : (body.error || "Denetim başarısız (" + res.status + ")");
+          : (body.message || body.error || "Denetim başarısız (" + res.status + ")");
         throw new Error(msg);
       }
       render(await res.json());
@@ -1900,6 +2061,269 @@ function closeSidebar(){
           : "—");
     }
     document.getElementById("sslDetails").innerHTML = rows.join("");
+  }
+})();
+
+/* ==========================================================
+   DNS Query Resolver & Spoofing
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = {
+    CRITICAL:{ c:"#e5484d", t:"Kritik" }, HIGH:{ c:"#f0a93b", t:"Yüksek" },
+    MEDIUM:{ c:"#f0a93b", t:"Orta" },     LOW:{ c:"#2fd8c8", t:"Düşük" }
+  };
+
+  function esc(v){
+    const d = document.createElement("div");
+    d.textContent = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return d.innerHTML;
+  }
+
+  const form = document.getElementById("dnsForm");
+  if (!form) return;
+
+  form.addEventListener("submit", async function(e){
+    e.preventDefault();
+    const err = document.getElementById("dnsError");
+    const btn = document.getElementById("dnsBtn");
+    const prog = document.getElementById("dnsProgress");
+    err.textContent = "";
+    btn.disabled = true;
+    prog.classList.remove("d-none");
+
+    const payload = {
+      domain: document.getElementById("dnsDomain").value.trim(),
+      spoofCheck: document.getElementById("dnsSpoof").checked
+    };
+
+    try {
+      const res = await fetch("/api/v1/dns/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        const msg = body.fields
+          ? Object.values(body.fields).join(" · ")
+          : (body.message || body.error || "Sorgu başarısız (" + res.status + ")");
+        throw new Error(msg);
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = false;
+      prog.classList.add("d-none");
+    }
+  });
+
+  function render(r){
+    document.getElementById("dnsEmpty").classList.add("d-none");
+    document.getElementById("dnsResult").classList.remove("d-none");
+
+    // --- Bulgular ---
+    const fw = document.getElementById("dnsFindings");
+    if (!r.findings || r.findings.length === 0) {
+      fw.innerHTML = '<div style="color:#2fd8c8;font-size:.86rem;">'
+                   + '<i class="bi bi-check-circle"></i> Risk tespit edilmedi.</div>';
+    } else {
+      fw.innerHTML = r.findings.map(function(f){
+        const s = SEV[f.severity] || SEV.LOW;
+        return '<div class="alert-feed-item">'
+             +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+             +   '<div class="flex-grow-1">'
+             +     '<div class="a-txt">' + esc(f.message) + '</div>'
+             +     '<div class="a-time">' + s.t + '</div>'
+             +   '</div>'
+             + '</div>';
+      }).join("");
+    }
+
+    // --- Cozumleyici karsilastirmasi ---
+    const card = document.getElementById("dnsResolverCard");
+    if (!r.resolvers || r.resolvers.length === 0) {
+      card.classList.add("d-none");
+    } else {
+      card.classList.remove("d-none");
+      const badge = document.getElementById("dnsConsistency");
+      if (r.consistent) {
+        badge.textContent = "Tutarlı";
+        badge.style.background = "rgba(47,216,200,.14)";
+        badge.style.color = "#2fd8c8";
+      } else {
+        badge.textContent = "Yanıtlar ayrışıyor";
+        badge.style.background = "rgba(240,169,59,.14)";
+        badge.style.color = "#f0a93b";
+      }
+      document.getElementById("dnsResolvers").innerHTML = r.resolvers.map(function(a){
+        const val = a.error
+          ? '<span style="color:#e5484d;">' + esc(a.error) + '</span>'
+          : (a.aRecords.length
+              ? a.aRecords.map(function(ip){ return '<span class="port-chip">' + esc(ip) + '</span>'; }).join(" ")
+              : "—");
+        return '<tr>'
+             +   '<td>' + esc(a.name) + ' <span class="text-muted font-mono" style="font-size:.72rem;">' + esc(a.address) + '</span></td>'
+             +   '<td>' + val + '</td>'
+             +   '<td class="font-mono">' + esc(a.responseMs) + 'ms</td>'
+             + '</tr>';
+      }).join("");
+    }
+
+    // --- Kayitlar ---
+    const rec = r.records || {};
+    const rows = Object.keys(rec).map(function(type){
+      const vals = rec[type];
+      const cell = (vals && vals.length)
+        ? vals.map(function(v){
+            return '<div class="font-mono" style="font-size:.78rem;word-break:break-all;">' + esc(v) + '</div>';
+          }).join("")
+        : '<span class="text-muted">—</span>';
+      return '<tr><td class="text-muted" style="width:22%;">' + esc(type) + '</td><td>' + cell + '</td></tr>';
+    });
+    document.getElementById("dnsRecords").innerHTML = rows.join("");
+
+    // --- Ters DNS ---
+    const rc = document.getElementById("dnsReverseCard");
+    if (!r.reverseLookups || r.reverseLookups.length === 0) {
+      rc.classList.add("d-none");
+    } else {
+      rc.classList.remove("d-none");
+      document.getElementById("dnsReverse").innerHTML = r.reverseLookups.map(function(x){
+        const ok = x.forwardConfirmed
+          ? '<span style="color:#2fd8c8;">Doğrulandı</span>'
+          : '<span style="color:#f0a93b;">Doğrulanmadı</span>';
+        return '<tr>'
+             +   '<td class="font-mono">' + esc(x.ip) + '</td>'
+             +   '<td class="font-mono" style="font-size:.78rem;">' + esc(x.ptr) + '</td>'
+             +   '<td>' + ok + '</td>'
+             + '</tr>';
+      }).join("");
+    }
+  }
+})();
+
+/* ==========================================================
+   Subnet & MAC Analyzer
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = {
+    CRITICAL:{ c:"#e5484d", t:"Kritik" }, HIGH:{ c:"#f0a93b", t:"Yüksek" },
+    MEDIUM:{ c:"#f0a93b", t:"Orta" },     LOW:{ c:"#2fd8c8", t:"Düşük" }
+  };
+
+  function esc(v){
+    const d = document.createElement("div");
+    d.textContent = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return d.innerHTML;
+  }
+
+  function mono(v){ return '<span class="font-mono">' + esc(v) + '</span>'; }
+
+  const form = document.getElementById("subnetForm");
+  if (!form) return;
+
+  form.addEventListener("submit", async function(e){
+    e.preventDefault();
+    const err = document.getElementById("subnetError");
+    const btn = document.getElementById("subnetBtn");
+    err.textContent = "";
+    btn.disabled = true;
+
+    const payload = {
+      cidr: document.getElementById("subnetCidr").value.trim(),
+      mac: document.getElementById("subnetMac").value.trim() || null
+    };
+
+    try {
+      const res = await fetch("/api/v1/subnet/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        const msg = body.fields
+          ? Object.values(body.fields).join(" · ")
+          : (body.message || body.error || "Hesaplama başarısız (" + res.status + ")");
+        throw new Error(msg);
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function render(r){
+    document.getElementById("subnetEmpty").classList.add("d-none");
+    document.getElementById("subnetResult").classList.remove("d-none");
+
+    document.getElementById("subUsable").textContent = r.usableHosts.toLocaleString("tr-TR");
+    document.getElementById("subTotal").textContent  = r.totalAddresses.toLocaleString("tr-TR");
+    document.getElementById("subScope").textContent  = r.scope;
+
+    const rows = [];
+    function satir(k, v){
+      rows.push('<tr><td class="text-muted" style="width:40%;">' + k + '</td><td>' + v + '</td></tr>');
+    }
+
+    satir("Ağ adresi", mono(r.networkAddress + "/" + r.prefixLength));
+    satir("Yayın adresi", r.broadcastAddress ? mono(r.broadcastAddress) : '<span class="text-muted">yok</span>');
+    satir("Host aralığı", mono(r.firstHost) + ' <span class="text-muted">—</span> ' + mono(r.lastHost));
+    satir("Alt ağ maskesi", mono(r.subnetMask));
+    satir("Wildcard maske", mono(r.wildcardMask));
+    satir("İkili maske", '<span class="font-mono" style="font-size:.74rem;">' + esc(r.binaryMask) + '</span>');
+    satir("Adres sınıfı", esc(r.addressClass));
+    document.getElementById("subnetDetails").innerHTML = rows.join("");
+
+    // MAC
+    const macCard = document.getElementById("subnetMacCard");
+    if (!r.mac) {
+      macCard.classList.add("d-none");
+    } else {
+      macCard.classList.remove("d-none");
+      const m = r.mac;
+      const mrows = [];
+      function msatir(k, v){
+        mrows.push('<tr><td class="text-muted" style="width:40%;">' + k + '</td><td>' + v + '</td></tr>');
+      }
+      msatir("Adres", mono(m.address));
+      msatir("OUI öneki", mono(m.oui));
+      msatir("Üretici", m.vendorHint
+        ? esc(m.vendorHint)
+        : '<span class="text-muted">bilinmiyor</span>');
+      msatir("Yerel atanmış", m.locallyAdministered
+        ? '<span style="color:#f0a93b;">Evet</span>'
+        : '<span style="color:#2fd8c8;">Hayır</span>');
+      msatir("Çoklu yayın", m.multicast
+        ? '<span style="color:#f0a93b;">Evet</span>'
+        : '<span style="color:#2fd8c8;">Hayır</span>');
+      document.getElementById("subnetMacDetails").innerHTML = mrows.join("");
+    }
+
+    // Bulgular
+    const fw = document.getElementById("subnetFindings");
+    if (!r.findings || r.findings.length === 0) {
+      fw.innerHTML = '<div style="color:#2fd8c8;font-size:.86rem;">'
+                   + '<i class="bi bi-check-circle"></i> Dikkat edilmesi gereken bir nokta yok.</div>';
+    } else {
+      fw.innerHTML = r.findings.map(function(f){
+        const s = SEV[f.severity] || SEV.LOW;
+        return '<div class="alert-feed-item">'
+             +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+             +   '<div class="flex-grow-1">'
+             +     '<div class="a-txt">' + esc(f.message) + '</div>'
+             +     '<div class="a-time">' + s.t + '</div>'
+             +   '</div>'
+             + '</div>';
+      }).join("");
+    }
   }
 })();
 </script>
