@@ -6,7 +6,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -35,6 +38,7 @@ public class HttpHeaderAuditService {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
     private static final String USER_AGENT = "security-utility-suite/1.0 (header audit)";
+    private static final int MAX_REDIRECTS = 5;
 
     /** Sunucu hakkinda bilgi sizdiran, kaldirilmasi onerilen basliklar. */
     private static final List<String> LEAKY_HEADERS =
@@ -44,26 +48,56 @@ public class HttpHeaderAuditService {
         String url = request.getUrl().trim();
         long start = System.currentTimeMillis();
 
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(TIMEOUT)
+                // Yonlendirmeleri HttpClient'a birakmiyoruz: her hop'u kendimiz
+                // dogrulayip takip ediyoruz, boylece guvenli gorunen bir adres
+                // ic aga/metadata servisine yonlendirerek SSRF korumasini
+                // atlatamiyor.
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .build();
+
         HttpResponse<Void> response;
+        String currentUrl = url;
         try {
-            HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(TIMEOUT)
-                    .followRedirects(request.isFollowRedirects()
-                            ? HttpClient.Redirect.NORMAL
-                            : HttpClient.Redirect.NEVER)
-                    .build();
+            int hops = 0;
+            while (true) {
+                guardAgainstSsrf(currentUrl);
 
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(TIMEOUT)
-                    .header("User-Agent", USER_AGENT)
-                    .GET()
-                    .build();
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create(currentUrl))
+                        .timeout(TIMEOUT)
+                        .header("User-Agent", USER_AGENT)
+                        .GET()
+                        .build();
 
-            // Govde indirilmez; sadece basliklar lazim.
-            response = client.send(req, HttpResponse.BodyHandlers.discarding());
+                // Govde indirilmez; sadece basliklar lazim.
+                HttpResponse<Void> res = client.send(req, HttpResponse.BodyHandlers.discarding());
+
+                int status = res.statusCode();
+                boolean isRedirect = status == 301 || status == 302 || status == 303
+                        || status == 307 || status == 308;
+
+                if (!isRedirect || !request.isFollowRedirects()) {
+                    response = res;
+                    break;
+                }
+
+                if (++hops > MAX_REDIRECTS) {
+                    throw new IllegalArgumentException("Çok fazla yönlendirme (>" + MAX_REDIRECTS + ")");
+                }
+
+                String location = res.headers().firstValue("location")
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                status + " yönlendirmesi ama Location başlığı yok"));
+                currentUrl = res.uri().resolve(location).toString();
+            }
+        } catch (IllegalArgumentException ex) {
+            // SSRF guard veya redirect hatasi: kullaniciya net sebep donuyoruz.
+            log.warn("Baslik denetimi engellendi url={}: {}", currentUrl, ex.getMessage());
+            return HeaderAuditResponse.unreachable(url, ex.getMessage());
         } catch (Exception ex) {
-            log.warn("Baslik denetimi basarisiz url={}: {}", url, ex.getMessage());
+            log.warn("Baslik denetimi basarisiz url={}: {}", currentUrl, ex.getMessage());
             return HeaderAuditResponse.unreachable(url, kisaHata(ex));
         }
 
@@ -284,6 +318,63 @@ public class HttpHeaderAuditService {
         if (score >= 40) return "D";
         if (score >= 20) return "E";
         return "F";
+    }
+
+    // ------------------------------------------------------------------
+    // SSRF korumasi
+    // ------------------------------------------------------------------
+
+    /**
+     * Hedef URL'nin host'unu cozup, cozulen HERHANGI bir IP ozel/dahili bir
+     * araliga dusuyorsa istegi reddeder. Bu kontrol hem ilk istekte hem de
+     * her yonlendirme adiminda tekrar cagrilir; aksi halde saldirgan once
+     * herkese acik bir adrese, sonra 302 ile ic aga yonlendirebilirdi.
+     *
+     * DNS rebinding'e karsi tam koruma saglamaz (cozum ile baglanti arasinda
+     * kayit degisebilir), ama bu, dogrudan literal ic IP/host verilmesini ve
+     * basit redirect tabanli SSRF'i engeller.
+     */
+    private void guardAgainstSsrf(String rawUrl) {
+        URI uri = URI.create(rawUrl);
+        String host = uri.getHost();
+        if (host == null || host.isBlank()) {
+            throw new IllegalArgumentException("Adreste geçerli bir host yok");
+        }
+
+        InetAddress[] addresses;
+        try {
+            addresses = InetAddress.getAllByName(host);
+        } catch (UnknownHostException e) {
+            throw new IllegalArgumentException("Host çözülemedi: " + host);
+        }
+
+        for (InetAddress addr : addresses) {
+            if (isBlockedAddress(addr)) {
+                throw new IllegalArgumentException(
+                        "Hedef, iç ağ/özel/yerel bir adrese çözümleniyor (" + addr.getHostAddress()
+                                + "); güvenlik nedeniyle bu adreslere istek atılmıyor.");
+            }
+        }
+    }
+
+    private boolean isBlockedAddress(InetAddress addr) {
+        if (addr.isLoopbackAddress()      // 127.0.0.0/8, ::1
+                || addr.isLinkLocalAddress()   // 169.254.0.0/16 (bulut metadata dahil), fe80::/10
+                || addr.isSiteLocalAddress()   // 10/8, 172.16/12, 192.168/16, fc00::/7
+                || addr.isAnyLocalAddress()    // 0.0.0.0, ::
+                || addr.isMulticastAddress()) {
+            return true;
+        }
+        // 100.64.0.0/10 (Carrier-Grade NAT) - isSiteLocalAddress bunu yakalamaz.
+        if (addr instanceof Inet4Address) {
+            byte[] b = addr.getAddress();
+            int first = b[0] & 0xFF;
+            int second = b[1] & 0xFF;
+            if (first == 100 && second >= 64 && second <= 127) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ------------------------------------------------------------------

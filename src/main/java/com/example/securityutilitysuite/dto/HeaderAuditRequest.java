@@ -21,11 +21,6 @@ public class HeaderAuditRequest {
     public HeaderAuditRequest() {
     }
 
-    public HeaderAuditRequest(String url, boolean followRedirects) {
-        this.url = url;
-        this.followRedirects = followRedirects;
-    }
-
     public String getUrl() {
         return url;
     }
