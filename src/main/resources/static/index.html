@@ -258,6 +258,117 @@
   @media (prefers-reduced-motion: reduce){
     .pulse-dot, .module-nav .nav-link.active::after{ animation:none; }
   }
+
+  /* ================= SIDEBAR TOOLBOX ================= */
+  .app-container{ display:grid; grid-template-columns:264px 1fr; align-items:start; }
+
+  .sidebar-toolbox{
+    position:sticky; top:0; height:100vh; overflow-y:auto;
+    background:var(--surface); border-right:1px solid var(--border);
+    padding:1rem .75rem 2rem;
+  }
+  .sidebar-section-title{
+    font-family:'JetBrains Mono',monospace; font-size:.66rem; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--muted);
+    padding:.9rem .6rem .35rem; display:flex; align-items:center; gap:.4rem;
+  }
+  .tool-btn{
+    width:100%; display:flex; align-items:center; gap:.55rem;
+    background:transparent; border:1px solid transparent; border-radius:8px;
+    color:var(--muted); font-size:.82rem; font-family:'Inter',sans-serif;
+    padding:.45rem .6rem; text-align:left; line-height:1.3; cursor:pointer;
+    transition:background .12s, color .12s, border-color .12s;
+  }
+  .tool-btn .bi{ font-size:.9rem; width:16px; flex-shrink:0; }
+  .tool-btn:hover{ background:rgba(47,216,200,.06); color:var(--text); }
+  .tool-btn.active{
+    background:var(--cyan-dim); border-color:rgba(47,216,200,.35); color:var(--cyan); font-weight:600;
+  }
+  .home-btn{
+    width:100%; display:flex; align-items:center; gap:.55rem;
+    background:var(--cyan-dim); border:1px solid rgba(47,216,200,.35); border-radius:8px;
+    color:var(--cyan); font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:.86rem;
+    padding:.6rem .7rem; text-align:left; cursor:pointer; margin-bottom:.35rem;
+  }
+  .home-btn:hover{ background:rgba(47,216,200,.2); }
+  .sidebar-hint{
+    font-size:.68rem; color:var(--muted); line-height:1.45;
+    padding:.35rem .6rem 0; border-top:1px solid var(--border); margin-top:1rem; padding-top:.75rem;
+  }
+  .menu-toggle{
+    display:none; background:var(--surface-alt); border:1px solid var(--border);
+    color:var(--text); border-radius:8px; width:36px; height:36px; cursor:pointer;
+  }
+  .sidebar-backdrop{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1040; }
+
+  /* ================= VITRIN ALTI WIDGET'LAR ================= */
+  .dashboard-footer-widgets{
+    display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:1.5rem;
+  }
+  .widget-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.15rem 1.25rem;
+  }
+  .widget-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:.9rem; }
+  .widget-head .wt{
+    font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:.92rem;
+    display:flex; align-items:center; gap:.45rem;
+  }
+  .widget-head .live-tag{
+    font-family:'JetBrains Mono',monospace; font-size:.62rem; color:var(--cyan);
+    display:flex; align-items:center; gap:.35rem;
+  }
+  .status-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:.45rem 0; border-bottom:1px solid var(--border); font-size:.82rem;
+  }
+  .status-row:last-child{ border-bottom:none; }
+  .status-row .k{ color:var(--muted); }
+  .status-row .v{ font-family:'JetBrains Mono',monospace; display:flex; align-items:center; gap:.4rem; }
+  .status-row .v.crit{ color:var(--red); }
+  .status-row .v.warn{ color:var(--amber); }
+  .status-row .v.ok{ color:var(--cyan); }
+
+  .alert-feed-item{
+    display:flex; gap:.6rem; align-items:flex-start;
+    padding:.5rem 0; border-bottom:1px solid var(--border);
+  }
+  .alert-feed-item:last-child{ border-bottom:none; }
+  .feed-dot{ width:8px; height:8px; border-radius:50%; margin-top:.4rem; flex-shrink:0; }
+  .alert-feed-item .a-txt{ font-size:.8rem; line-height:1.35; }
+  .alert-feed-item .a-time{ font-family:'JetBrains Mono',monospace; font-size:.66rem; color:var(--muted); }
+
+  /* ================= DINAMIK ARAC GORUNUMU ================= */
+  .tool-header{
+    display:flex; align-items:flex-start; gap:1rem;
+    padding-bottom:1.1rem; margin-bottom:1.4rem; border-bottom:1px solid var(--border);
+  }
+  .tool-icon-box{
+    width:54px; height:54px; border-radius:13px; flex-shrink:0;
+    background:var(--cyan-dim); border:1px solid rgba(47,216,200,.3);
+    display:flex; align-items:center; justify-content:center; font-size:1.5rem; color:var(--cyan);
+  }
+  .tool-cat-chip{
+    font-family:'JetBrains Mono',monospace; font-size:.64rem; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--cyan); background:var(--cyan-dim);
+    border:1px solid rgba(47,216,200,.3); padding:.15em .55em; border-radius:20px;
+  }
+  .tool-workspace{
+    background:var(--surface); border:1px dashed var(--border); border-radius:12px;
+    padding:2.5rem 1.5rem; text-align:center;
+  }
+  .tool-workspace .bi{ font-size:2rem; color:var(--border); }
+
+  @media (max-width: 991px){
+    .app-container{ grid-template-columns:1fr; }
+    .sidebar-toolbox{
+      position:fixed; left:0; top:0; bottom:0; width:264px; z-index:1050;
+      transform:translateX(-100%); transition:transform .2s ease;
+    }
+    .sidebar-toolbox.open{ transform:translateX(0); }
+    .sidebar-backdrop.show{ display:block; }
+    .menu-toggle{ display:inline-flex; align-items:center; justify-content:center; }
+    .dashboard-footer-widgets{ grid-template-columns:1fr; }
+  }
 </style>
 </head>
 <body>
@@ -265,6 +376,7 @@
 <nav class="navbar-suite py-3 mb-4">
   <div class="container-xl d-flex align-items-center justify-content-between flex-wrap gap-2">
     <div class="d-flex align-items-center gap-3">
+      <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Menü"><i class="bi bi-list"></i></button>
       <div class="brand-mark">
         <i class="bi bi-shield-lock-fill"></i>
       </div>
@@ -283,7 +395,50 @@
   </div>
 </nav>
 
+
+<div class="app-container">
+
+<!-- ==================== SOL MENU: GUVENLIK ARAC KUTUSU ==================== -->
+<aside class="sidebar-toolbox" id="sidebarToolbox">
+
+  <button class="home-btn active" id="homeBtn" onclick="showDashboard()">
+    <i class="bi bi-speedometer2"></i> Ana Modüller (Vitrin)
+  </button>
+  <div class="sidebar-hint" style="border-top:none; margin-top:0; padding-top:.2rem;">
+    Vitrin hızlı müdahale içindir. Aşağıdaki araçlar detaylı inceleme sağlar.
+  </div>
+
+  <div class="sidebar-section-title"><i class="bi bi-hdd-network"></i> Ağ &amp; Protokol</div>
+  <button class="tool-btn" data-tool="dns"     onclick="showTool('dns')"><i class="bi bi-globe2"></i> DNS Query Resolver</button>
+  <button class="tool-btn" data-tool="ssl"     onclick="showTool('ssl')"><i class="bi bi-shield-lock"></i> SSL/TLS Inspector</button>
+  <button class="tool-btn" data-tool="headers" onclick="showTool('headers')"><i class="bi bi-list-check"></i> HTTP Security Headers</button>
+  <button class="tool-btn" data-tool="subnet"  onclick="showTool('subnet')"><i class="bi bi-diagram-3"></i> Subnet &amp; MAC Analyzer</button>
+
+  <div class="sidebar-section-title"><i class="bi bi-bug"></i> Zafiyet &amp; Tehdit</div>
+  <button class="tool-btn" data-tool="phishing" onclick="showTool('phishing')"><i class="bi bi-link-45deg"></i> Phishing URL Detector</button>
+  <button class="tool-btn" data-tool="webvuln"  onclick="showTool('webvuln')"><i class="bi bi-bug-fill"></i> Web Zafiyet (XSS/SQLi)</button>
+  <button class="tool-btn" data-tool="gitleak"  onclick="showTool('gitleak')"><i class="bi bi-key"></i> Git &amp; Secret Leak Finder</button>
+  <button class="tool-btn" data-tool="ioc"      onclick="showTool('ioc')"><i class="bi bi-radar"></i> Threat Intel (IOC)</button>
+
+  <div class="sidebar-section-title"><i class="bi bi-lock"></i> Veri &amp; Kriptografi</div>
+  <button class="tool-btn" data-tool="exif"   onclick="showTool('exif')"><i class="bi bi-image"></i> Metadata (EXIF) Cleaner</button>
+  <button class="tool-btn" data-tool="hash"   onclick="showTool('hash')"><i class="bi bi-hash"></i> Hash Verifier &amp; Cracker</button>
+  <button class="tool-btn" data-tool="base64" onclick="showTool('base64')"><i class="bi bi-arrow-left-right"></i> Base64 / Hex Converter</button>
+  <button class="tool-btn" data-tool="aes"    onclick="showTool('aes')"><i class="bi bi-file-lock2"></i> AES-256 Encryptor</button>
+
+  <div class="sidebar-section-title"><i class="bi bi-journal-text"></i> Log &amp; SIEM</div>
+  <button class="tool-btn" data-tool="jwt"      onclick="showTool('jwt')"><i class="bi bi-ticket-detailed"></i> JWT Token Analyzer</button>
+  <button class="tool-btn" data-tool="sshblock" onclick="showTool('sshblock')"><i class="bi bi-slash-circle"></i> SSH Brute-Force Blocker</button>
+
+  <div class="sidebar-hint">
+    <i class="bi bi-info-circle"></i> Ek araçlar geliştirme aşamasındadır.
+  </div>
+</aside>
+
+<main class="main-content">
 <div class="container-xl pb-5">
+
+<section id="dashboard-view">
 
   <ul class="nav module-nav" id="moduleTabs" role="tablist">
     <li class="nav-item" role="presentation">
@@ -711,10 +866,65 @@
 
   </div>
 
+
+  <!-- ==================== VITRIN ALTI CANLI PANELLER ==================== -->
+  <div class="dashboard-footer-widgets">
+
+    <div class="widget-card">
+      <div class="widget-head">
+        <span class="wt"><i class="bi bi-activity"></i> Sistem Durumu</span>
+        <span class="live-tag"><span class="pulse-dot"></span> CANLI</span>
+      </div>
+      <div class="status-row"><span class="k">Motor Durumu</span><span class="v ok"><span class="pulse-dot"></span> Aktif</span></div>
+      <div class="status-row"><span class="k">Toplam Uyarı</span><span class="v" id="wTotalAlerts">0</span></div>
+      <div class="status-row"><span class="k">Kritik Uyarı</span><span class="v crit" id="wCriticalAlerts">0</span></div>
+      <div class="status-row"><span class="k">İzlenen Dosya</span><span class="v" id="wTrackedFiles">0</span></div>
+      <div class="status-row"><span class="k">Riskli Dosya</span><span class="v warn" id="wRiskyFiles">0</span></div>
+      <div class="status-row"><span class="k">Taranan Host</span><span class="v" id="wScannedHosts">0</span></div>
+    </div>
+
+    <div class="widget-card">
+      <div class="widget-head">
+        <span class="wt"><i class="bi bi-bell"></i> Son Tehdit Akışı</span>
+        <span class="live-tag"><span class="pulse-dot"></span> AKIŞ</span>
+      </div>
+      <div id="alertFeed"></div>
+      <div id="alertFeedEmpty" class="empty-state compact d-none">
+        <i class="bi bi-shield-check d-block mb-1"></i>Kritik tehdit yok.
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ==================== DINAMIK EK ARAC ALANI ==================== -->
+<section id="tool-view" class="d-none">
+  <div class="tool-header">
+    <div class="tool-icon-box"><i class="bi bi-tools" id="toolIcon"></i></div>
+    <div>
+      <h5 class="font-display mb-1" id="toolTitle">Araç</h5>
+      <span class="tool-cat-chip" id="toolCat">Kategori</span>
+      <p class="text-muted mb-0 mt-2" style="font-size:.86rem; max-width:620px;" id="toolDesc"></p>
+    </div>
+  </div>
+  <div class="tool-workspace">
+    <i class="bi bi-hourglass-split d-block mb-2"></i>
+    <h6 class="font-display mb-2">Modül çalışma alanı</h6>
+    <p class="text-muted mb-0" style="font-size:.86rem; max-width:460px; margin:0 auto;">
+      Bu aracın girdi formu ve sonuç paneli burada yer alacak.
+      İlgili backend servisi bağlandığında bu alan aktifleşecektir.
+    </p>
+  </div>
+</section>
+
   <div class="footer-note text-center mt-4">
     security-utility-suite · Yalnızca yetkili olduğunuz sistemler üzerinde kullanın.
   </div>
 </div>
+</main>
+</div><!-- /app-container -->
+
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
@@ -1304,13 +1514,136 @@
         i => i.threatType, THREAT_LABEL, THREAT_COLOR, "uyarı");
       renderRiskyIps(data.topRiskyIps);
       renderRecentAlerts(data.recentCriticalAlerts);
+
+      // Vitrin alti canli paneller
+      renderStatusWidgets(data);
     } catch (err) {
       console.error(err);
     }
   }
 
+  // ---- Vitrin alti: Sistem Durumu + Tehdit Akisi ----
+  function sumCounts(list){
+    return (list || []).reduce(function(t, i){ return t + (i.count || 0); }, 0);
+  }
+
+  function renderStatusWidgets(data){
+    const severity = data.severityDistribution || [];
+    const critical = severity
+      .filter(function(i){ return i.severity === "CRITICAL"; })
+      .reduce(function(t, i){ return t + i.count; }, 0);
+
+    document.getElementById("wTotalAlerts").textContent    = sumCounts(severity);
+    document.getElementById("wCriticalAlerts").textContent = critical;
+    document.getElementById("wTrackedFiles").textContent   = sumCounts(data.integrityStatusDistribution);
+    document.getElementById("wRiskyFiles").textContent     = (data.riskyFiles || []).length;
+    document.getElementById("wScannedHosts").textContent   = (data.topScannedHosts || []).length;
+
+    const feed = document.getElementById("alertFeed");
+    const feedEmpty = document.getElementById("alertFeedEmpty");
+    const items = (data.recentCriticalAlerts || []).slice(0, 5);
+
+    if (items.length === 0) {
+      feed.innerHTML = "";
+      feedEmpty.classList.remove("d-none");
+      return;
+    }
+    feedEmpty.classList.add("d-none");
+
+    feed.innerHTML = items.map(function(a){
+      const color = SEVERITY_COLOR[a.severity] || "#2fd8c8";
+      const threat = THREAT_LABEL[a.threatType] || a.threatType;
+      const time = a.detectedAt ? new Date(a.detectedAt).toLocaleTimeString("tr-TR") : "";
+      return '<div class="alert-feed-item">'
+           +   '<span class="feed-dot" style="background:' + color + ';"></span>'
+           +   '<div class="flex-grow-1">'
+           +     '<div class="a-txt">' + threat + ' — <span class="font-mono">' + (a.ipAddress || "?") + '</span></div>'
+           +     '<div class="a-time">' + time + '</div>'
+           +   '</div>'
+           + '</div>';
+    }).join("");
+  }
+
   loadDashboardStats();
 })();
+</script>
+
+<script>
+/* ==========================================================
+   Sol menu yonlendirme mantigi (vitrin <-> tekil arac)
+   ========================================================== */
+const TOOLS = {
+  dns:      { icon:"bi-globe2",          cat:"Ağ & Protokol",       title:"DNS Query Resolver & Spoofing",
+              desc:"Alan adı çözümlemesi yapar; A/AAAA/MX/TXT kayıtlarını sorgular ve olası DNS spoofing belirtilerini analiz eder." },
+  ssl:      { icon:"bi-shield-lock",     cat:"Ağ & Protokol",       title:"SSL/TLS Sertifika Inspector",
+              desc:"Sertifika zincirini, geçerlilik süresini, imza algoritmasını ve zayıf cipher yapılandırmalarını denetler." },
+  headers:  { icon:"bi-list-check",      cat:"Ağ & Protokol",       title:"HTTP Security Headers Audit",
+              desc:"HSTS, CSP, X-Frame-Options gibi güvenlik başlıklarının varlığını ve doğru yapılandırıldığını kontrol eder." },
+  subnet:   { icon:"bi-diagram-3",       cat:"Ağ & Protokol",       title:"Subnet & MAC OUI Analyzer",
+              desc:"CIDR blokları için ağ/broadcast/host aralığı hesaplar ve MAC adresinin OUI önekinden üretici bilgisini çözer." },
+  phishing: { icon:"bi-link-45deg",      cat:"Zafiyet & Tehdit",    title:"Phishing URL & Domain Detector",
+              desc:"URL yapısını, typosquatting kalıplarını ve şüpheli TLD kullanımını puanlayarak olası oltalama girişimlerini işaretler." },
+  webvuln:  { icon:"bi-bug-fill",        cat:"Zafiyet & Tehdit",    title:"Web Zafiyet Tarayıcı (XSS/SQLi)",
+              desc:"Hedef uç noktalara güvenli test payload'ları göndererek yansıyan XSS ve temel SQL enjeksiyonu belirtilerini tespit eder." },
+  gitleak:  { icon:"bi-key",             cat:"Zafiyet & Tehdit",    title:"Git & Secret Leak Finder",
+              desc:"Depo geçmişini tarayarak API anahtarı, token ve parola gibi sızmış gizli bilgileri regex kalıplarıyla bulur." },
+  ioc:      { icon:"bi-radar",           cat:"Zafiyet & Tehdit",    title:"Threat Intelligence / IOC Check",
+              desc:"IP, alan adı ve dosya hash'lerini tehdit istihbaratı beslemeleriyle karşılaştırarak bilinen zararlı göstergeleri sorgular." },
+  exif:     { icon:"bi-image",           cat:"Veri & Kriptografi",  title:"Metadata (EXIF) Cleaner",
+              desc:"Görsellerdeki EXIF/konum/cihaz üstverisini listeler ve gizlilik için temizlenmiş bir kopya üretir." },
+  hash:     { icon:"bi-hash",            cat:"Veri & Kriptografi",  title:"Hash Verifier & Dictionary Cracker",
+              desc:"Dosya ve metin hash'lerini doğrular; zayıf parolalar için sözlük tabanlı eşleştirme testleri yapar." },
+  base64:   { icon:"bi-arrow-left-right",cat:"Veri & Kriptografi",  title:"Base64 / Hex Encoder-Decoder",
+              desc:"Metin ve ikili veriyi Base64 ile Hex formatları arasında ileri-geri dönüştürür." },
+  aes:      { icon:"bi-file-lock2",      cat:"Veri & Kriptografi",  title:"AES-256 / Sezar Encryptor",
+              desc:"Metni AES-256 ile simetrik olarak şifreler ve çözer; ayrıca eğitim amaçlı klasik Sezar şifreleme sunar." },
+  jwt:      { icon:"bi-ticket-detailed", cat:"Log & SIEM",          title:"JWT Token Analyzer",
+              desc:"JWT header ve payload'ını çözer, imza algoritmasını ve exp/iat alanlarını doğrular, 'alg: none' gibi riskleri işaretler." },
+  sshblock: { icon:"bi-slash-circle",    cat:"Log & SIEM",          title:"SSH Brute-Force Blocker",
+              desc:"Auth loglarındaki başarısız SSH giriş denemelerini analiz eder ve eşiği aşan IP'ler için engelleme kuralları önerir." }
+};
+
+function setActiveNav(key){
+  document.querySelectorAll(".tool-btn").forEach(function(b){ b.classList.remove("active"); });
+  document.getElementById("homeBtn").classList.remove("active");
+  if (key === "home") {
+    document.getElementById("homeBtn").classList.add("active");
+  } else {
+    const btn = document.querySelector('.tool-btn[data-tool="' + key + '"]');
+    if (btn) btn.classList.add("active");
+  }
+}
+
+function showDashboard(){
+  document.getElementById("tool-view").classList.add("d-none");
+  document.getElementById("dashboard-view").classList.remove("d-none");
+  setActiveNav("home");
+  window.scrollTo({ top:0, behavior:"smooth" });
+  closeSidebar();
+}
+
+function showTool(toolId){
+  const t = TOOLS[toolId];
+  if (!t) return;
+  document.getElementById("dashboard-view").classList.add("d-none");
+  document.getElementById("tool-view").classList.remove("d-none");
+  document.getElementById("toolIcon").className = "bi " + t.icon;
+  document.getElementById("toolTitle").textContent = t.title;
+  document.getElementById("toolCat").textContent = t.cat;
+  document.getElementById("toolDesc").textContent = t.desc;
+  setActiveNav(toolId);
+  window.scrollTo({ top:0, behavior:"smooth" });
+  closeSidebar();
+}
+
+function toggleSidebar(){
+  document.getElementById("sidebarToolbox").classList.toggle("open");
+  document.getElementById("sidebarBackdrop").classList.toggle("show");
+}
+function closeSidebar(){
+  document.getElementById("sidebarToolbox").classList.remove("open");
+  document.getElementById("sidebarBackdrop").classList.remove("show");
+}
 </script>
 </body>
 </html>

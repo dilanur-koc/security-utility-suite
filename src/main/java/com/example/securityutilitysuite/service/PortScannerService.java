@@ -10,7 +10,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -56,7 +58,14 @@ public class PortScannerService {
      * Runs a scan: fans out one virtual-thread task per port, waits for
      * all of them, persists the outcome, and returns the saved entity.
      */
-    @Transactional
+    /**
+     * Not: bu metot bilerek {@code @Transactional} DEGILDIR. Tek bir
+     * transaction icinde calissaydi (a) IN_PROGRESS satiri commit
+     * edilmedigi icin tarama surerken hicbir sorguda gorunmezdi, (b) uzun
+     * suren tarama boyunca bir veritabani baglantisi bosuna tutulur ve
+     * birkac es zamanli tarama havuzu tuketebilirdi. Iki save() cagrisi
+     * kendi kisa transaction'larinda calisir.
+     */
     public ScanResult scan(ScanRequest request) {
         long start = System.currentTimeMillis();
 
@@ -67,8 +76,17 @@ public class PortScannerService {
         ScanStatus finalStatus;
 
         try {
+            // Host'u once cozumle: erisilemeyen bir adres icin her port
+            // "kapali" donerdi ve sonuc "basarili tarama, 0 acik port" gibi
+            // gorunurdu. Kullanici host'un ayakta olmadigini anlayamiyordu.
+            InetAddress.getByName(request.getTargetHost());
+
             openPorts = scanPortRange(request.getTargetHost(), request.getStartPort(), request.getEndPort());
             finalStatus = ScanStatus.COMPLETED;
+        } catch (UnknownHostException ex) {
+            log.warn("Host cozumlenemedi: {}", request.getTargetHost());
+            openPorts = Collections.emptyList();
+            finalStatus = ScanStatus.FAILED;
         } catch (Exception ex) {
             log.warn("Scan failed for host={} range={}-{}: {}",
                     request.getTargetHost(), request.getStartPort(), request.getEndPort(), ex.getMessage());

@@ -11,6 +11,7 @@ import com.example.securityutilitysuite.repository.FileIntegrityRecordRepository
 import com.example.securityutilitysuite.repository.ScanResultRepository;
 import com.example.securityutilitysuite.repository.SecurityLogAlertRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
@@ -38,6 +39,7 @@ public class StatisticsService {
         this.scanResultRepository = scanResultRepository;
     }
 
+    @Transactional(readOnly = true)
     public DashboardStatsResponse getDashboardStats() {
         return new DashboardStatsResponse(
                 buildSeverityDistribution(),
@@ -104,7 +106,9 @@ public class StatisticsService {
 
     private List<DashboardStatsResponse.PortFrequencyDTO> buildTopOpenPorts() {
         Map<String, Long> portCounts = new HashMap<>();
-        for (ScanResult scan : scanResultRepository.findAll()) {
+        // findAll() her dashboard yuklemesinde tum tabloyu bellege cekiyordu.
+        // Istatistik icin son 50 tarama yeterli ve maliyeti sabit.
+        for (ScanResult scan : scanResultRepository.findTop50ByOrderByCreatedAtDesc()) {
             String openPorts = scan.getOpenPorts();
             if (openPorts == null || openPorts.isBlank()) {
                 continue;

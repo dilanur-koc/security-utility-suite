@@ -16,3 +16,6 @@ application-secrets.yml
 .gradle/
 .idea/
 build/
+
+# H2 dosya tabanli veritabani
+data/

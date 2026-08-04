@@ -42,7 +42,8 @@ public class ScanRequest {
 
     @AssertTrue(message = "Tek seferde en fazla 10.000 port taranabilir")
     public boolean isRangeWithinLimit() {
-        return (endPort - startPort) <= 10_000;
+        // +1: 1-10000 araligi 10.000 porttur, 1-10001 ise 10.001.
+        return (endPort - startPort + 1) <= 10_000;
     }
 
     public String getTargetHost() {
