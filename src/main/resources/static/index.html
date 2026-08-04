@@ -963,6 +963,87 @@
 
 
 
+
+  <!-- ==================== HTTP SECURITY HEADERS ==================== -->
+  <div id="ws-headers" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="card-suite p-3 p-lg-4">
+          <form id="hdrForm">
+            <div class="mb-3">
+              <label class="form-label" for="hdrUrl">Adres</label>
+              <input type="text" class="form-control font-mono" id="hdrUrl"
+                     placeholder="https://example.com" required>
+            </div>
+            <div class="form-check mb-3">
+              <input class="form-check-input" type="checkbox" id="hdrRedirect" checked>
+              <label class="form-check-label" for="hdrRedirect" style="font-size:.82rem;">
+                Yönlendirmeleri takip et
+              </label>
+            </div>
+            <button type="submit" class="btn btn-scan w-100" id="hdrBtn">
+              <i class="bi bi-list-check"></i> Başlıkları Denetle
+            </button>
+            <div id="hdrError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+          </form>
+
+          <div id="hdrProgress" class="d-none mt-4 text-center">
+            <div class="spinner-border" style="color:var(--cyan);width:2rem;height:2rem;" role="status"></div>
+            <div class="text-muted mt-2" style="font-size:.82rem;">İstek gönderiliyor…</div>
+          </div>
+
+          <div id="hdrScoreBox" class="d-none mt-4 pt-3" style="border-top:1px solid var(--border);">
+            <div class="text-center">
+              <div id="hdrGrade" class="font-display" style="font-size:3rem;line-height:1;font-weight:700;">—</div>
+              <div class="text-muted" style="font-size:.78rem;">
+                <span id="hdrScore">0</span>/100 puan
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div id="hdrEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-list-check d-block mb-2"></i>
+            Denetlemek istediğiniz adresi soldan girin.
+          </div>
+        </div>
+
+        <div id="hdrResult" class="d-none">
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-display mb-0">Güvenlik Başlıkları</h6>
+              <span class="stats-eyebrow" id="hdrMeta"></span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead><tr><th>Başlık</th><th>Durum</th><th>Değer</th></tr></thead>
+                <tbody id="hdrChecks"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">Bulgular</h6>
+            <div id="hdrFindings"></div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-display mb-0">Ham Yanıt Başlıkları</h6>
+              <button class="btn btn-sm btn-outline-suite" id="hdrToggleRaw">Göster / Gizle</button>
+            </div>
+            <div class="table-responsive d-none" id="hdrRawWrap">
+              <table class="table table-suite mb-0"><tbody id="hdrRaw"></tbody></table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== SUBNET & MAC ANALYZER ==================== -->
   <div id="ws-subnet" class="d-none">
     <div class="row g-4">
@@ -2324,6 +2405,133 @@ function closeSidebar(){
              + '</div>';
       }).join("");
     }
+  }
+})();
+
+/* ==========================================================
+   HTTP Security Headers Audit
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = {
+    CRITICAL:{ c:"#e5484d", t:"Kritik" }, HIGH:{ c:"#e5484d", t:"Yüksek" },
+    MEDIUM:{ c:"#f0a93b", t:"Orta" },     LOW:{ c:"#2fd8c8", t:"Düşük" }
+  };
+  const STATUS = {
+    OK:      { c:"#2fd8c8", t:"Var" },
+    WARN:    { c:"#f0a93b", t:"Zayıf" },
+    MISSING: { c:"#e5484d", t:"Yok" }
+  };
+  const GRADE_COLOR = { A:"#2fd8c8", B:"#2fd8c8", C:"#f0a93b", D:"#f0a93b", E:"#e5484d", F:"#e5484d" };
+
+  function esc(v){
+    const d = document.createElement("div");
+    d.textContent = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return d.innerHTML;
+  }
+
+  const form = document.getElementById("hdrForm");
+  if (!form) return;
+
+  const rawBtn = document.getElementById("hdrToggleRaw");
+  if (rawBtn) {
+    rawBtn.addEventListener("click", function(){
+      document.getElementById("hdrRawWrap").classList.toggle("d-none");
+    });
+  }
+
+  form.addEventListener("submit", async function(e){
+    e.preventDefault();
+    const err = document.getElementById("hdrError");
+    const btn = document.getElementById("hdrBtn");
+    const prog = document.getElementById("hdrProgress");
+    err.textContent = "";
+    btn.disabled = true;
+    prog.classList.remove("d-none");
+
+    let url = document.getElementById("hdrUrl").value.trim();
+    if (url && !/^https?:\/\//i.test(url)) { url = "https://" + url; }
+
+    try {
+      const res = await fetch("/api/v1/headers/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url, followRedirects: document.getElementById("hdrRedirect").checked })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        const msg = body.fields
+          ? Object.values(body.fields).join(" · ")
+          : (body.message || body.error || "Denetim başarısız (" + res.status + ")");
+        throw new Error(msg);
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = false;
+      prog.classList.add("d-none");
+    }
+  });
+
+  function render(r){
+    document.getElementById("hdrEmpty").classList.add("d-none");
+    document.getElementById("hdrResult").classList.remove("d-none");
+    document.getElementById("hdrScoreBox").classList.remove("d-none");
+
+    const g = document.getElementById("hdrGrade");
+    g.textContent = r.grade;
+    g.style.color = GRADE_COLOR[r.grade] || "#6b7c8c";
+    document.getElementById("hdrScore").textContent = r.score;
+
+    document.getElementById("hdrMeta").textContent =
+      (r.statusCode || "") + " · " + (r.responseMs || 0) + "ms";
+
+    // Basliklar
+    document.getElementById("hdrChecks").innerHTML = (r.checks || []).map(function(c){
+      const st = STATUS[c.status] || STATUS.MISSING;
+      const note = c.note
+        ? '<div class="text-muted" style="font-size:.72rem;margin-top:.2rem;">' + esc(c.note) + '</div>'
+        : "";
+      const val = c.value
+        ? '<span class="font-mono" style="font-size:.72rem;word-break:break-all;">' + esc(c.value) + '</span>'
+        : '<span class="text-muted">—</span>';
+      return '<tr>'
+           +   '<td><div>' + esc(c.name) + '</div>'
+           +     '<div class="text-muted" style="font-size:.7rem;">' + esc(c.description) + '</div></td>'
+           +   '<td><span class="badge-status" style="background:' + st.c + '22;color:' + st.c + ';">'
+           +     st.t + '</span></td>'
+           +   '<td>' + val + note + '</td>'
+           + '</tr>';
+    }).join("");
+
+    // Bulgular
+    const fw = document.getElementById("hdrFindings");
+    if (!r.findings || r.findings.length === 0) {
+      fw.innerHTML = '<div style="color:#2fd8c8;font-size:.86rem;">'
+                   + '<i class="bi bi-check-circle"></i> Risk tespit edilmedi.</div>';
+    } else {
+      fw.innerHTML = r.findings.map(function(f){
+        const s = SEV[f.severity] || SEV.LOW;
+        return '<div class="alert-feed-item">'
+             +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+             +   '<div class="flex-grow-1">'
+             +     '<div class="a-txt">' + esc(f.message) + '</div>'
+             +     '<div class="a-time">' + s.t + '</div>'
+             +   '</div>'
+             + '</div>';
+      }).join("");
+    }
+
+    // Ham basliklar
+    const raw = r.rawHeaders || {};
+    document.getElementById("hdrRaw").innerHTML = Object.keys(raw).sort().map(function(k){
+      return '<tr>'
+           +   '<td class="text-muted font-mono" style="width:34%;font-size:.74rem;">' + esc(k) + '</td>'
+           +   '<td class="font-mono" style="font-size:.74rem;word-break:break-all;">' + esc(raw[k]) + '</td>'
+           + '</tr>';
+    }).join("");
   }
 })();
 </script>
