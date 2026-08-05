@@ -49,7 +49,7 @@
   }
   .navbar-inner{
     display:flex; align-items:center; justify-content:space-between;
-    gap:1rem; flex-wrap:wrap; padding:.7rem 1.5rem;
+    gap:1rem; flex-wrap:wrap; padding:.7rem 1.8rem .7rem 1.1rem;
   }
   .brand-mark{
     width:38px;height:38px;border-radius:9px;
@@ -273,19 +273,27 @@
   }
 
   /* ================= SIDEBAR TOOLBOX ================= */
-  .app-container{ display:grid; grid-template-columns:248px 1fr; align-items:start; min-height:100vh; }
+  .app-container{ display:grid; grid-template-columns:248px minmax(0,1fr); align-items:start; min-height:100vh; }
+
+  /* Bootstrap'in .container-xl'i kendini ortalar ve max-width uygular.
+     Sidebar'in yaninda bu, icerikle menu arasinda genis bos bir serit
+     birakiyordu. Main icinde ortalamayi kapatiyoruz. */
+  .main-content > .container-xl{
+    max-width:none; width:100%;
+    padding-left:1.6rem; padding-right:1.8rem;
+    margin-left:0; margin-right:0;
+  }
 
   .sidebar-toolbox{
-    position:sticky; top:64px; align-self:start;
+    position:sticky; top:61px; align-self:start;
     background:transparent; border-right:none;
-    padding:1.1rem .6rem 2rem .9rem;
+    padding:1.35rem .6rem 2rem 1.1rem;
   }
   /* kutu hissi yerine yumusak, asagi dogru sonlanan ayirici */
   .sidebar-toolbox::after{
     content:""; position:absolute; top:.5rem; right:0; bottom:2rem; width:1px;
     background:linear-gradient(180deg, transparent, rgba(255,255,255,.045) 18%, rgba(255,255,255,.045) 70%, transparent);
   }
-  .sidebar-toolbox{ position:sticky; }
   .sidebar-brand{
     display:flex; align-items:center; gap:.55rem;
     padding:.15rem .4rem .9rem;
@@ -472,7 +480,7 @@
 </aside>
 
 <main class="main-content">
-<div class="container-xl pb-5">
+<div class="container-xl pt-4 pb-5">
 
 <section id="dashboard-view">
 
@@ -943,13 +951,330 @@
       <p class="text-muted mb-0 mt-2" style="font-size:.86rem; max-width:620px;" id="toolDesc"></p>
     </div>
   </div>
-  <div class="tool-workspace">
+  <!-- Henuz backend'i olmayan araclar icin -->
+  <div class="tool-workspace" id="ws-placeholder">
     <i class="bi bi-hourglass-split d-block mb-2"></i>
     <h6 class="font-display mb-2">Modül çalışma alanı</h6>
     <p class="text-muted mb-0" style="font-size:.86rem; max-width:460px; margin:0 auto;">
       Bu aracın girdi formu ve sonuç paneli burada yer alacak.
       İlgili backend servisi bağlandığında bu alan aktifleşecektir.
     </p>
+  </div>
+
+
+
+
+  <!-- ==================== HTTP SECURITY HEADERS ==================== -->
+  <div id="ws-headers" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="card-suite p-3 p-lg-4">
+          <form id="hdrForm">
+            <div class="mb-3">
+              <label class="form-label" for="hdrUrl">Adres</label>
+              <input type="text" class="form-control font-mono" id="hdrUrl"
+                     placeholder="https://example.com" required>
+            </div>
+            <div class="form-check mb-3">
+              <input class="form-check-input" type="checkbox" id="hdrRedirect" checked>
+              <label class="form-check-label" for="hdrRedirect" style="font-size:.82rem;">
+                Yönlendirmeleri takip et
+              </label>
+            </div>
+            <button type="submit" class="btn btn-scan w-100" id="hdrBtn">
+              <i class="bi bi-list-check"></i> Başlıkları Denetle
+            </button>
+            <div id="hdrError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+          </form>
+
+          <div id="hdrProgress" class="d-none mt-4 text-center">
+            <div class="spinner-border" style="color:var(--cyan);width:2rem;height:2rem;" role="status"></div>
+            <div class="text-muted mt-2" style="font-size:.82rem;">İstek gönderiliyor…</div>
+          </div>
+
+          <div id="hdrScoreBox" class="d-none mt-4 pt-3" style="border-top:1px solid var(--border);">
+            <div class="text-center">
+              <div id="hdrGrade" class="font-display" style="font-size:3rem;line-height:1;font-weight:700;">—</div>
+              <div class="text-muted" style="font-size:.78rem;">
+                <span id="hdrScore">0</span>/100 puan
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div id="hdrEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-list-check d-block mb-2"></i>
+            Denetlemek istediğiniz adresi soldan girin.
+          </div>
+        </div>
+
+        <div id="hdrResult" class="d-none">
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-display mb-0">Güvenlik Başlıkları</h6>
+              <span class="stats-eyebrow" id="hdrMeta"></span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead><tr><th>Başlık</th><th>Durum</th><th>Değer</th></tr></thead>
+                <tbody id="hdrChecks"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">Bulgular</h6>
+            <div id="hdrFindings"></div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-display mb-0">Ham Yanıt Başlıkları</h6>
+              <button class="btn btn-sm btn-outline-suite" id="hdrToggleRaw">Göster / Gizle</button>
+            </div>
+            <div class="table-responsive d-none" id="hdrRawWrap">
+              <table class="table table-suite mb-0"><tbody id="hdrRaw"></tbody></table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SUBNET & MAC ANALYZER ==================== -->
+  <div id="ws-subnet" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="card-suite p-3 p-lg-4">
+          <form id="subnetForm">
+            <div class="mb-3">
+              <label class="form-label" for="subnetCidr">CIDR Bloğu</label>
+              <input type="text" class="form-control font-mono" id="subnetCidr"
+                     placeholder="192.168.1.0/24" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="subnetMac">MAC Adresi <span class="text-muted">(isteğe bağlı)</span></label>
+              <input type="text" class="form-control font-mono" id="subnetMac"
+                     placeholder="00:1A:2B:3C:4D:5E">
+            </div>
+            <button type="submit" class="btn btn-scan w-100" id="subnetBtn">
+              <i class="bi bi-diagram-3"></i> Hesapla
+            </button>
+            <div id="subnetError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+          </form>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div id="subnetEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-diagram-3 d-block mb-2"></i>
+            Hesaplamak istediğiniz CIDR bloğunu soldan girin.
+          </div>
+        </div>
+
+        <div id="subnetResult" class="d-none">
+          <div class="row g-3 mb-3">
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="subUsable" style="font-size:1.1rem;">—</div>
+                <div class="stat-label">Kullanılabilir Host</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="subTotal" style="font-size:1.1rem;">—</div>
+                <div class="stat-label">Toplam Adres</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="subScope" style="font-size:.9rem;">—</div>
+                <div class="stat-label">Kapsam</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">Ağ Bilgileri</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0"><tbody id="subnetDetails"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3 d-none" id="subnetMacCard">
+            <h6 class="font-display mb-3">MAC Analizi</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0"><tbody id="subnetMacDetails"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <h6 class="font-display mb-3">Bulgular</h6>
+            <div id="subnetFindings"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== DNS QUERY RESOLVER ==================== -->
+  <div id="ws-dns" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="card-suite p-3 p-lg-4">
+          <form id="dnsForm">
+            <div class="mb-3">
+              <label class="form-label" for="dnsDomain">Alan Adı</label>
+              <input type="text" class="form-control font-mono" id="dnsDomain"
+                     placeholder="example.com" required>
+            </div>
+            <div class="form-check mb-3">
+              <input class="form-check-input" type="checkbox" id="dnsSpoof" checked>
+              <label class="form-check-label" for="dnsSpoof" style="font-size:.82rem;">
+                Spoofing kontrolü yap
+              </label>
+              <div class="text-muted" style="font-size:.72rem;line-height:1.4;">
+                Aynı sorgu Google, Cloudflare ve Quad9'a ayrı ayrı sorulup yanıtlar karşılaştırılır.
+              </div>
+            </div>
+            <button type="submit" class="btn btn-scan w-100" id="dnsBtn">
+              <i class="bi bi-globe2"></i> Sorgula
+            </button>
+            <div id="dnsError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+          </form>
+
+          <div id="dnsProgress" class="d-none mt-4 text-center">
+            <div class="spinner-border" style="color:var(--cyan);width:2rem;height:2rem;" role="status"></div>
+            <div class="text-muted mt-2" style="font-size:.82rem;">Çözümleyicilere soruluyor…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div id="dnsEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-globe2 d-block mb-2"></i>
+            Sorgulamak istediğiniz alan adını soldan girin.
+          </div>
+        </div>
+
+        <div id="dnsResult" class="d-none">
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">Bulgular</h6>
+            <div id="dnsFindings"></div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3" id="dnsResolverCard">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-display mb-0">Çözümleyici Karşılaştırması</h6>
+              <span id="dnsConsistency" class="badge-status"></span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead><tr><th>Çözümleyici</th><th>A Kayıtları</th><th>Süre</th></tr></thead>
+                <tbody id="dnsResolvers"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">DNS Kayıtları</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0"><tbody id="dnsRecords"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4" id="dnsReverseCard">
+            <h6 class="font-display mb-3">Ters DNS (PTR)</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead><tr><th>IP</th><th>PTR</th><th>İleri Doğrulama</th></tr></thead>
+                <tbody id="dnsReverse"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SSL/TLS INSPECTOR ==================== -->
+  <div id="ws-ssl" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="card-suite p-3 p-lg-4">
+          <form id="sslForm">
+            <div class="mb-3">
+              <label class="form-label" for="sslDomain">Host Adı</label>
+              <input type="text" class="form-control font-mono" id="sslDomain"
+                     placeholder="example.com" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="sslPort">Port</label>
+              <input type="number" class="form-control font-mono" id="sslPort"
+                     min="1" max="65535" value="443" required>
+            </div>
+            <button type="submit" class="btn btn-scan w-100" id="sslBtn">
+              <i class="bi bi-shield-lock"></i> Sertifikayı Denetle
+            </button>
+            <div id="sslError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+          </form>
+
+          <div id="sslProgress" class="d-none mt-4 text-center">
+            <div class="spinner-border" style="color:var(--cyan);width:2rem;height:2rem;" role="status"></div>
+            <div class="text-muted mt-2" style="font-size:.82rem;">TLS el sıkışması yapılıyor…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div id="sslEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-shield-lock d-block mb-2"></i>
+            Denetlemek istediğiniz host adını soldan girin.
+          </div>
+        </div>
+
+        <div id="sslResult" class="d-none">
+          <div class="row g-3 mb-3">
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="sslDays">—</div>
+                <div class="stat-label">Kalan Gün</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="sslProto" style="font-size:1rem;">—</div>
+                <div class="stat-label">Protokol</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="sslKey" style="font-size:1rem;">—</div>
+                <div class="stat-label">Anahtar</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">Bulgular</h6>
+            <div id="sslFindings"></div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <h6 class="font-display mb-3">Sertifika Detayları</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0"><tbody id="sslDetails"></tbody></table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -963,7 +1288,9 @@
 <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
+
 (function(){
   "use strict";
 
@@ -1001,9 +1328,16 @@
   }
 
   function escapeHtml(str){
-    const div = document.createElement("div");
-    div.textContent = str;
-    return div.innerHTML;
+    // textContent -> innerHTML yalnizca & < > karakterlerini kacirir; TIRNAKLARI
+    // KACIRMAZ. Deger bir oznitelige yaziliyorsa (orn. title="...") saldirgan
+    // tirnakla oznitelikten cikip onmouseover= gibi olay ekleyebilirdi.
+    if (str === null || str === undefined) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   // ---- shared label / color maps (used by findings table + stats donuts) ----
@@ -1060,7 +1394,8 @@
         const errBody = await res.json().catch(() => ({}));
         const msg = errBody.fields
           ? Object.values(errBody.fields).join(" · ")
-          : "Tarama başlatılamadı (" + res.status + ")";
+          : (errBody.message || errBody.error
+             || "Tarama başlatılamadı (" + res.status + "). Hedef host alanına port yazmayın.");
         throw new Error(msg);
       }
 
@@ -1106,7 +1441,7 @@
 
       historyBody.innerHTML = items.map(item => `
         <tr>
-          <td class="font-mono">${item.targetHost ?? "—"}</td>
+          <td class="font-mono">${escapeHtml(item.targetHost ?? "—")}</td>
           <td>${formatPorts(item.openPorts)}</td>
           <td class="font-mono">${item.scanDurationMs != null ? item.scanDurationMs + "ms" : "—"}</td>
           <td>${statusBadge(item.status)}</td>
@@ -1165,7 +1500,7 @@
 
       integrityBody.innerHTML = items.map(item => `
         <tr>
-          <td class="font-mono">${item.filePath}</td>
+          <td class="font-mono">${escapeHtml(item.filePath)}</td>
           <td class="font-mono">${truncateHash(item.baselineHash)}</td>
           <td class="text-muted">${item.lastCheckedAt ? formatDate(item.lastCheckedAt) : "—"}</td>
           <td>${integrityStatusBadge(item.status)}</td>
@@ -1302,10 +1637,10 @@
       return `
         <tr>
           <td class="text-muted">${formatDate(a.detectedAt)}</td>
-          <td class="font-mono">${a.ipAddress || "—"}</td>
+          <td class="font-mono">${escapeHtml(a.ipAddress || "—")}</td>
           <td>${threatChip(a.threatType)}</td>
           <td>${severityBadge(a.severity)}</td>
-          <td class="font-mono">${a.logSource || "—"}</td>
+          <td class="font-mono">${escapeHtml(a.logSource || "—")}</td>
           <td><span class="raw-log-cell font-mono" title="${rawLog}">${rawLog || "—"}</span></td>
         </tr>
       `;
@@ -1433,7 +1768,7 @@
       const pct = total > 0 ? Math.round((i.count / total) * 100) : 0;
       return `
         <div class="legend-row">
-          <span class="legend-name"><span class="legend-dot" style="background:${color};"></span>${label}</span>
+          <span class="legend-name"><span class="legend-dot" style="background:${color};"></span>${escapeHtml(label)}</span>
           <span class="legend-meta"><span class="pct">${pct}%</span>${i.count}</span>
         </div>
       `;
@@ -1468,7 +1803,7 @@
       return `
         <div class="freq-row">
           <div class="freq-row-head">
-            <span class="freq-label">${labelFn(i)}</span>
+            <span class="freq-label">${escapeHtml(labelFn(i))}</span>
             <span class="freq-count">${i.count}</span>
           </div>
           <div class="freq-track"><div class="freq-fill" style="width:${pct}%;"></div></div>
@@ -1487,7 +1822,7 @@
     }
     empty.classList.add("d-none");
     body.innerHTML = items.map(i => `
-      <tr><td class="font-mono">${i.ipAddress}</td><td class="font-mono">${i.count}</td></tr>
+      <tr><td class="font-mono">${escapeHtml(i.ipAddress)}</td><td class="font-mono">${i.count}</td></tr>
     `).join("");
   }
 
@@ -1502,7 +1837,7 @@
     empty.classList.add("d-none");
     body.innerHTML = items.map(a => `
       <tr>
-        <td class="font-mono">${a.ipAddress || "—"}</td>
+        <td class="font-mono">${escapeHtml(a.ipAddress || "—")}</td>
         <td>${THREAT_LABEL[a.threatType] || a.threatType}</td>
         <td><span class="badge-status" style="background:${SEVERITY_COLOR[a.severity]}22;color:${SEVERITY_COLOR[a.severity]};">${SEVERITY_LABEL[a.severity] || a.severity}</span></td>
         <td class="text-muted">${formatDate(a.detectedAt)}</td>
@@ -1521,7 +1856,7 @@
     empty.classList.add("d-none");
     body.innerHTML = items.map(f => `
       <tr>
-        <td class="font-mono">${f.filePath}</td>
+        <td class="font-mono">${escapeHtml(f.filePath)}</td>
         <td><span class="integrity-dot" style="background:${INTEGRITY_COLOR[f.status]};"></span>${INTEGRITY_LABEL[f.status] || f.status}</td>
         <td class="text-muted">${formatDate(f.lastCheckedAt)}</td>
       </tr>
@@ -1667,6 +2002,12 @@ function showTool(toolId){
   document.getElementById("toolTitle").textContent = t.title;
   document.getElementById("toolCat").textContent = t.cat;
   document.getElementById("toolDesc").textContent = t.desc;
+
+  // Uygulanmis araclarin kendi calisma alani var; digerleri yer tutucuyu gorur.
+  document.querySelectorAll('#tool-view [id^="ws-"]').forEach(function(el){ el.classList.add("d-none"); });
+  const ws = document.getElementById("ws-" + toolId);
+  (ws || document.getElementById("ws-placeholder")).classList.remove("d-none");
+
   setActiveNav(toolId);
   window.scrollTo(0, 0);
   closeSidebar();
@@ -1680,6 +2021,532 @@ function closeSidebar(){
   document.getElementById("sidebarToolbox").classList.remove("open");
   document.getElementById("sidebarBackdrop").classList.remove("show");
 }
+
+/* ==========================================================
+   SSL/TLS Inspector
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = {
+    CRITICAL:{ c:"#e5484d", t:"Kritik" }, HIGH:{ c:"#f0a93b", t:"Yüksek" },
+    MEDIUM:{ c:"#f0a93b", t:"Orta" },     LOW:{ c:"#2fd8c8", t:"Düşük" }
+  };
+
+  function esc(v){
+    // Tirnaklar dahil kacirir; deger oznitelige yazilsa bile guvenli.
+    const t = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function tarih(iso){
+    if (!iso) return "—";
+    return new Date(iso).toLocaleString("tr-TR");
+  }
+
+  function evetHayir(deger, iyiDegerTrue){
+    const iyi = iyiDegerTrue ? deger : !deger;
+    const renk = iyi ? "#2fd8c8" : "#e5484d";
+    return '<span style="color:' + renk + ';">' + (deger ? "Evet" : "Hayır") + '</span>';
+  }
+
+  const form = document.getElementById("sslForm");
+  if (!form) return;
+
+  form.addEventListener("submit", async function(e){
+    e.preventDefault();
+
+    const err = document.getElementById("sslError");
+    const btn = document.getElementById("sslBtn");
+    const prog = document.getElementById("sslProgress");
+    err.textContent = "";
+    btn.disabled = true;
+    prog.classList.remove("d-none");
+
+    const payload = {
+      domain: document.getElementById("sslDomain").value.trim(),
+      port: parseInt(document.getElementById("sslPort").value, 10)
+    };
+
+    try {
+      const res = await fetch("/api/v1/ssl/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        const msg = body.fields
+          ? Object.values(body.fields).join(" · ")
+          : (body.message || body.error || "Denetim başarısız (" + res.status + ")");
+        throw new Error(msg);
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = false;
+      prog.classList.add("d-none");
+    }
+  });
+
+  function render(r){
+    document.getElementById("sslEmpty").classList.add("d-none");
+    document.getElementById("sslResult").classList.remove("d-none");
+
+    // Ozet kutulari
+    const days = document.getElementById("sslDays");
+    if (r.reachable) {
+      days.textContent = r.daysRemaining;
+      days.style.color = r.expired ? "#e5484d" : (r.daysRemaining <= 30 ? "#f0a93b" : "#2fd8c8");
+    } else {
+      days.textContent = "—";
+      days.style.color = "";
+    }
+    document.getElementById("sslProto").textContent = r.protocol || "—";
+    document.getElementById("sslKey").textContent =
+      r.keyAlgorithm ? (r.keyAlgorithm + " " + (r.keySizeBits || "?")) : "—";
+
+    // Bulgular
+    const fw = document.getElementById("sslFindings");
+    if (!r.findings || r.findings.length === 0) {
+      fw.innerHTML = '<div style="color:#2fd8c8;font-size:.86rem;">'
+                   + '<i class="bi bi-check-circle"></i> Risk tespit edilmedi.</div>';
+    } else {
+      fw.innerHTML = r.findings.map(function(f){
+        const s = SEV[f.severity] || SEV.LOW;
+        return '<div class="alert-feed-item">'
+             +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+             +   '<div class="flex-grow-1">'
+             +     '<div class="a-txt">' + esc(f.message) + '</div>'
+             +     '<div class="a-time">' + s.t + '</div>'
+             +   '</div>'
+             + '</div>';
+      }).join("");
+    }
+
+    // Detay tablosu
+    const rows = [];
+    function satir(k, v){ rows.push('<tr><td class="text-muted" style="width:38%;">' + k + '</td><td>' + v + '</td></tr>'); }
+
+    satir("Host", '<span class="font-mono">' + esc(r.domain) + ':' + esc(r.port) + '</span>');
+    if (!r.reachable) {
+      satir("Durum", '<span style="color:#e5484d;">Bağlantı kurulamadı</span>');
+      satir("Hata", '<span class="font-mono">' + esc(r.error) + '</span>');
+    } else {
+      satir("Sahip (Subject)", '<span class="font-mono" style="font-size:.78rem;">' + esc(r.subject) + '</span>');
+      satir("Veren (Issuer)", '<span class="font-mono" style="font-size:.78rem;">' + esc(r.issuer) + '</span>');
+      satir("Geçerlilik", tarih(r.validFrom) + " — " + tarih(r.validTo));
+      satir("Süresi dolmuş", evetHayir(r.expired, false));
+      satir("Zincir doğrulandı", evetHayir(r.trusted, true));
+      satir("Host adı eşleşiyor", evetHayir(r.hostnameMatch, true));
+      satir("Kendinden imzalı", evetHayir(r.selfSigned, false));
+      satir("İmza algoritması", '<span class="font-mono">' + esc(r.signatureAlgorithm) + '</span>');
+      satir("Şifre takımı", '<span class="font-mono" style="font-size:.76rem;">' + esc(r.cipherSuite) + '</span>');
+      satir("Seri numarası", '<span class="font-mono" style="font-size:.76rem;">' + esc(r.serialNumber) + '</span>');
+      satir("Zincir uzunluğu", esc(r.chainLength));
+      satir("Kapsanan adlar (SAN)",
+        (r.subjectAlternativeNames && r.subjectAlternativeNames.length)
+          ? r.subjectAlternativeNames.map(function(n){ return '<span class="port-chip">' + esc(n) + '</span>'; }).join(" ")
+          : "—");
+    }
+    document.getElementById("sslDetails").innerHTML = rows.join("");
+  }
+})();
+
+/* ==========================================================
+   DNS Query Resolver & Spoofing
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = {
+    CRITICAL:{ c:"#e5484d", t:"Kritik" }, HIGH:{ c:"#f0a93b", t:"Yüksek" },
+    MEDIUM:{ c:"#f0a93b", t:"Orta" },     LOW:{ c:"#2fd8c8", t:"Düşük" }
+  };
+
+  function esc(v){
+    // Tirnaklar dahil kacirir; deger oznitelige yazilsa bile guvenli.
+    const t = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  const form = document.getElementById("dnsForm");
+  if (!form) return;
+
+  form.addEventListener("submit", async function(e){
+    e.preventDefault();
+    const err = document.getElementById("dnsError");
+    const btn = document.getElementById("dnsBtn");
+    const prog = document.getElementById("dnsProgress");
+    err.textContent = "";
+    btn.disabled = true;
+    prog.classList.remove("d-none");
+
+    const payload = {
+      domain: document.getElementById("dnsDomain").value.trim(),
+      spoofCheck: document.getElementById("dnsSpoof").checked
+    };
+
+    try {
+      const res = await fetch("/api/v1/dns/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        const msg = body.fields
+          ? Object.values(body.fields).join(" · ")
+          : (body.message || body.error || "Sorgu başarısız (" + res.status + ")");
+        throw new Error(msg);
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = false;
+      prog.classList.add("d-none");
+    }
+  });
+
+  function render(r){
+    document.getElementById("dnsEmpty").classList.add("d-none");
+    document.getElementById("dnsResult").classList.remove("d-none");
+
+    // --- Bulgular ---
+    const fw = document.getElementById("dnsFindings");
+    if (!r.findings || r.findings.length === 0) {
+      fw.innerHTML = '<div style="color:#2fd8c8;font-size:.86rem;">'
+                   + '<i class="bi bi-check-circle"></i> Risk tespit edilmedi.</div>';
+    } else {
+      fw.innerHTML = r.findings.map(function(f){
+        const s = SEV[f.severity] || SEV.LOW;
+        return '<div class="alert-feed-item">'
+             +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+             +   '<div class="flex-grow-1">'
+             +     '<div class="a-txt">' + esc(f.message) + '</div>'
+             +     '<div class="a-time">' + s.t + '</div>'
+             +   '</div>'
+             + '</div>';
+      }).join("");
+    }
+
+    // --- Cozumleyici karsilastirmasi ---
+    const card = document.getElementById("dnsResolverCard");
+    if (!r.resolvers || r.resolvers.length === 0) {
+      card.classList.add("d-none");
+    } else {
+      card.classList.remove("d-none");
+      const badge = document.getElementById("dnsConsistency");
+      if (r.consistent) {
+        badge.textContent = "Tutarlı";
+        badge.style.background = "rgba(47,216,200,.14)";
+        badge.style.color = "#2fd8c8";
+      } else {
+        badge.textContent = "Yanıtlar ayrışıyor";
+        badge.style.background = "rgba(240,169,59,.14)";
+        badge.style.color = "#f0a93b";
+      }
+      document.getElementById("dnsResolvers").innerHTML = r.resolvers.map(function(a){
+        const val = a.error
+          ? '<span style="color:#e5484d;">' + esc(a.error) + '</span>'
+          : (a.aRecords.length
+              ? a.aRecords.map(function(ip){ return '<span class="port-chip">' + esc(ip) + '</span>'; }).join(" ")
+              : "—");
+        return '<tr>'
+             +   '<td>' + esc(a.name) + ' <span class="text-muted font-mono" style="font-size:.72rem;">' + esc(a.address) + '</span></td>'
+             +   '<td>' + val + '</td>'
+             +   '<td class="font-mono">' + esc(a.responseMs) + 'ms</td>'
+             + '</tr>';
+      }).join("");
+    }
+
+    // --- Kayitlar ---
+    const rec = r.records || {};
+    const rows = Object.keys(rec).map(function(type){
+      const vals = rec[type];
+      const cell = (vals && vals.length)
+        ? vals.map(function(v){
+            return '<div class="font-mono" style="font-size:.78rem;word-break:break-all;">' + esc(v) + '</div>';
+          }).join("")
+        : '<span class="text-muted">—</span>';
+      return '<tr><td class="text-muted" style="width:22%;">' + esc(type) + '</td><td>' + cell + '</td></tr>';
+    });
+    document.getElementById("dnsRecords").innerHTML = rows.join("");
+
+    // --- Ters DNS ---
+    const rc = document.getElementById("dnsReverseCard");
+    if (!r.reverseLookups || r.reverseLookups.length === 0) {
+      rc.classList.add("d-none");
+    } else {
+      rc.classList.remove("d-none");
+      document.getElementById("dnsReverse").innerHTML = r.reverseLookups.map(function(x){
+        const ok = x.forwardConfirmed
+          ? '<span style="color:#2fd8c8;">Doğrulandı</span>'
+          : '<span style="color:#f0a93b;">Doğrulanmadı</span>';
+        return '<tr>'
+             +   '<td class="font-mono">' + esc(x.ip) + '</td>'
+             +   '<td class="font-mono" style="font-size:.78rem;">' + esc(x.ptr) + '</td>'
+             +   '<td>' + ok + '</td>'
+             + '</tr>';
+      }).join("");
+    }
+  }
+})();
+
+/* ==========================================================
+   Subnet & MAC Analyzer
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = {
+    CRITICAL:{ c:"#e5484d", t:"Kritik" }, HIGH:{ c:"#f0a93b", t:"Yüksek" },
+    MEDIUM:{ c:"#f0a93b", t:"Orta" },     LOW:{ c:"#2fd8c8", t:"Düşük" }
+  };
+
+  function esc(v){
+    // Tirnaklar dahil kacirir; deger oznitelige yazilsa bile guvenli.
+    const t = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function mono(v){ return '<span class="font-mono">' + esc(v) + '</span>'; }
+
+  const form = document.getElementById("subnetForm");
+  if (!form) return;
+
+  form.addEventListener("submit", async function(e){
+    e.preventDefault();
+    const err = document.getElementById("subnetError");
+    const btn = document.getElementById("subnetBtn");
+    err.textContent = "";
+    btn.disabled = true;
+
+    const payload = {
+      cidr: document.getElementById("subnetCidr").value.trim(),
+      mac: document.getElementById("subnetMac").value.trim() || null
+    };
+
+    try {
+      const res = await fetch("/api/v1/subnet/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        const msg = body.fields
+          ? Object.values(body.fields).join(" · ")
+          : (body.message || body.error || "Hesaplama başarısız (" + res.status + ")");
+        throw new Error(msg);
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function render(r){
+    document.getElementById("subnetEmpty").classList.add("d-none");
+    document.getElementById("subnetResult").classList.remove("d-none");
+
+    document.getElementById("subUsable").textContent = r.usableHosts.toLocaleString("tr-TR");
+    document.getElementById("subTotal").textContent  = r.totalAddresses.toLocaleString("tr-TR");
+    document.getElementById("subScope").textContent  = r.scope;
+
+    const rows = [];
+    function satir(k, v){
+      rows.push('<tr><td class="text-muted" style="width:40%;">' + k + '</td><td>' + v + '</td></tr>');
+    }
+
+    satir("Ağ adresi", mono(r.networkAddress + "/" + r.prefixLength));
+    satir("Yayın adresi", r.broadcastAddress ? mono(r.broadcastAddress) : '<span class="text-muted">yok</span>');
+    satir("Host aralığı", mono(r.firstHost) + ' <span class="text-muted">—</span> ' + mono(r.lastHost));
+    satir("Alt ağ maskesi", mono(r.subnetMask));
+    satir("Wildcard maske", mono(r.wildcardMask));
+    satir("İkili maske", '<span class="font-mono" style="font-size:.74rem;">' + esc(r.binaryMask) + '</span>');
+    satir("Adres sınıfı", esc(r.addressClass));
+    document.getElementById("subnetDetails").innerHTML = rows.join("");
+
+    // MAC
+    const macCard = document.getElementById("subnetMacCard");
+    if (!r.mac) {
+      macCard.classList.add("d-none");
+    } else {
+      macCard.classList.remove("d-none");
+      const m = r.mac;
+      const mrows = [];
+      function msatir(k, v){
+        mrows.push('<tr><td class="text-muted" style="width:40%;">' + k + '</td><td>' + v + '</td></tr>');
+      }
+      msatir("Adres", mono(m.address));
+      msatir("OUI öneki", mono(m.oui));
+      msatir("Üretici", m.vendorHint
+        ? esc(m.vendorHint)
+        : '<span class="text-muted">bilinmiyor</span>');
+      msatir("Yerel atanmış", m.locallyAdministered
+        ? '<span style="color:#f0a93b;">Evet</span>'
+        : '<span style="color:#2fd8c8;">Hayır</span>');
+      msatir("Çoklu yayın", m.multicast
+        ? '<span style="color:#f0a93b;">Evet</span>'
+        : '<span style="color:#2fd8c8;">Hayır</span>');
+      document.getElementById("subnetMacDetails").innerHTML = mrows.join("");
+    }
+
+    // Bulgular
+    const fw = document.getElementById("subnetFindings");
+    if (!r.findings || r.findings.length === 0) {
+      fw.innerHTML = '<div style="color:#2fd8c8;font-size:.86rem;">'
+                   + '<i class="bi bi-check-circle"></i> Dikkat edilmesi gereken bir nokta yok.</div>';
+    } else {
+      fw.innerHTML = r.findings.map(function(f){
+        const s = SEV[f.severity] || SEV.LOW;
+        return '<div class="alert-feed-item">'
+             +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+             +   '<div class="flex-grow-1">'
+             +     '<div class="a-txt">' + esc(f.message) + '</div>'
+             +     '<div class="a-time">' + s.t + '</div>'
+             +   '</div>'
+             + '</div>';
+      }).join("");
+    }
+  }
+})();
+
+/* ==========================================================
+   HTTP Security Headers Audit
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = {
+    CRITICAL:{ c:"#e5484d", t:"Kritik" }, HIGH:{ c:"#e5484d", t:"Yüksek" },
+    MEDIUM:{ c:"#f0a93b", t:"Orta" },     LOW:{ c:"#2fd8c8", t:"Düşük" }
+  };
+  const STATUS = {
+    OK:      { c:"#2fd8c8", t:"Var" },
+    WARN:    { c:"#f0a93b", t:"Zayıf" },
+    MISSING: { c:"#e5484d", t:"Yok" }
+  };
+  const GRADE_COLOR = { A:"#2fd8c8", B:"#2fd8c8", C:"#f0a93b", D:"#f0a93b", E:"#e5484d", F:"#e5484d" };
+
+  function esc(v){
+    // Tirnaklar dahil kacirir; deger oznitelige yazilsa bile guvenli.
+    const t = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  const form = document.getElementById("hdrForm");
+  if (!form) return;
+
+  const rawBtn = document.getElementById("hdrToggleRaw");
+  if (rawBtn) {
+    rawBtn.addEventListener("click", function(){
+      document.getElementById("hdrRawWrap").classList.toggle("d-none");
+    });
+  }
+
+  form.addEventListener("submit", async function(e){
+    e.preventDefault();
+    const err = document.getElementById("hdrError");
+    const btn = document.getElementById("hdrBtn");
+    const prog = document.getElementById("hdrProgress");
+    err.textContent = "";
+    btn.disabled = true;
+    prog.classList.remove("d-none");
+
+    let url = document.getElementById("hdrUrl").value.trim();
+    if (url && !/^https?:\/\//i.test(url)) { url = "https://" + url; }
+
+    try {
+      const res = await fetch("/api/v1/headers/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url, followRedirects: document.getElementById("hdrRedirect").checked })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        const msg = body.fields
+          ? Object.values(body.fields).join(" · ")
+          : (body.message || body.error || "Denetim başarısız (" + res.status + ")");
+        throw new Error(msg);
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = false;
+      prog.classList.add("d-none");
+    }
+  });
+
+  function render(r){
+    document.getElementById("hdrEmpty").classList.add("d-none");
+    document.getElementById("hdrResult").classList.remove("d-none");
+    document.getElementById("hdrScoreBox").classList.remove("d-none");
+
+    const g = document.getElementById("hdrGrade");
+    g.textContent = r.grade;
+    g.style.color = GRADE_COLOR[r.grade] || "#6b7c8c";
+    document.getElementById("hdrScore").textContent = r.score;
+
+    document.getElementById("hdrMeta").textContent =
+      (r.statusCode || "") + " · " + (r.responseMs || 0) + "ms";
+
+    // Basliklar
+    document.getElementById("hdrChecks").innerHTML = (r.checks || []).map(function(c){
+      const st = STATUS[c.status] || STATUS.MISSING;
+      const note = c.note
+        ? '<div class="text-muted" style="font-size:.72rem;margin-top:.2rem;">' + esc(c.note) + '</div>'
+        : "";
+      const val = c.value
+        ? '<span class="font-mono" style="font-size:.72rem;word-break:break-all;">' + esc(c.value) + '</span>'
+        : '<span class="text-muted">—</span>';
+      return '<tr>'
+           +   '<td><div>' + esc(c.name) + '</div>'
+           +     '<div class="text-muted" style="font-size:.7rem;">' + esc(c.description) + '</div></td>'
+           +   '<td><span class="badge-status" style="background:' + st.c + '22;color:' + st.c + ';">'
+           +     st.t + '</span></td>'
+           +   '<td>' + val + note + '</td>'
+           + '</tr>';
+    }).join("");
+
+    // Bulgular
+    const fw = document.getElementById("hdrFindings");
+    if (!r.findings || r.findings.length === 0) {
+      fw.innerHTML = '<div style="color:#2fd8c8;font-size:.86rem;">'
+                   + '<i class="bi bi-check-circle"></i> Risk tespit edilmedi.</div>';
+    } else {
+      fw.innerHTML = r.findings.map(function(f){
+        const s = SEV[f.severity] || SEV.LOW;
+        return '<div class="alert-feed-item">'
+             +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+             +   '<div class="flex-grow-1">'
+             +     '<div class="a-txt">' + esc(f.message) + '</div>'
+             +     '<div class="a-time">' + s.t + '</div>'
+             +   '</div>'
+             + '</div>';
+      }).join("");
+    }
+
+    // Ham basliklar
+    const raw = r.rawHeaders || {};
+    document.getElementById("hdrRaw").innerHTML = Object.keys(raw).sort().map(function(k){
+      return '<tr>'
+           +   '<td class="text-muted font-mono" style="width:34%;font-size:.74rem;">' + esc(k) + '</td>'
+           +   '<td class="font-mono" style="font-size:.74rem;word-break:break-all;">' + esc(raw[k]) + '</td>'
+           + '</tr>';
+    }).join("");
+  }
+})();
 </script>
 </body>
 </html>
