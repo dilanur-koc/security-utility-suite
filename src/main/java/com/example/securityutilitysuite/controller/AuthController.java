@@ -1,13 +1,14 @@
 package com.example.securityutilitysuite.controller;
 
 import com.example.securityutilitysuite.dto.RegisterRequest;
-import com.example.securityutilitysuite.enums.Role;
 import com.example.securityutilitysuite.model.User;
-import com.example.securityutilitysuite.repository.UserRepository;
+import com.example.securityutilitysuite.service.RegistrationService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,26 +18,54 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
-@RequiredArgsConstructor
 public class AuthController {
 
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final RegistrationService registrationService;
 
+    public AuthController(RegistrationService registrationService) {
+        this.registrationService = registrationService;
+    }
+
+    /**
+     * Kullanici olusturur.
+     *
+     * Sistemde hic kullanici yoksa (ilk kurulum) kayit serbesttir ve olusan
+     * hesap ADMIN olur. Sonrasinda yalnizca ADMIN yeni kullanici ekleyebilir;
+     * bu kural {@link RegistrationService} icinde uygulanir.
+     */
     @PostMapping("/register")
-    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
-        if (userRepository.existsByUsername(request.username())) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Bu kullanici adi zaten alinmis"));
-        }
+    public ResponseEntity<Map<String, String>> register(
+            @Valid @RequestBody RegisterRequest request,
+            Authentication authentication) {
 
-        User user = User.builder()
-                .username(request.username())
-                .password(passwordEncoder.encode(request.password()))
-                .email(request.email())
-                .role(Role.USER)
-                .build();
+        User user = registrationService.kaydet(request, authentication);
+        return ResponseEntity.ok(Map.of(
+                "message", "Kullanıcı oluşturuldu",
+                "username", user.getUsername(),
+                "role", user.getRole().name()
+        ));
+    }
 
-        userRepository.save(user);
-        return ResponseEntity.ok(Map.of("message", "Kullanici olusturuldu", "username", user.getUsername()));
+    /**
+     * Giris sayfasinin "ilk kurulum" mu yoksa normal giris mi gosterecegini
+     * bilmesi icin. Yalnizca boolean doner, kullanici bilgisi sizdirmaz.
+     */
+    @GetMapping("/setup-status")
+    public ResponseEntity<Map<String, Boolean>> setupStatus() {
+        return ResponseEntity.ok(Map.of("setupRequired", registrationService.kurulumBekliyor()));
+    }
+
+    /** Kayit kapaliyken gelen istek: 403. */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, String>> kayitKapali(IllegalStateException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Forbidden", "message", ex.getMessage()));
+    }
+
+    /** Kullanici adi cakismasi gibi girdi hatalari: 400. */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> gecersizGirdi(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest()
+                .body(Map.of("error", "Bad Request", "message", ex.getMessage()));
     }
 }

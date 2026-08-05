@@ -158,7 +158,9 @@
             <button type="submit">Giriş Yap</button>
         </form>
 
-        <p class="footer-note">Hesabın yok mu? /api/auth/register üzerinden oluşturabilirsin.</p>
+        <p class="footer-note" id="footerNote">
+            Hesap oluşturma yöneticiye kapalıdır.
+        </p>
     </div>
 
     <script>
@@ -168,6 +170,47 @@
         }
         if (params.get('logout') === 'true') {
             document.getElementById('logoutMsg').style.display = 'block';
+        }
+
+        // Ilk kurulum: sistemde hic kullanici yoksa yonetici hesabi olusturma
+        // baglantisi gosterilir. Aksi halde kayit kapalidir.
+        fetch('/api/auth/setup-status')
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+                if (d && d.setupRequired) {
+                    document.getElementById('footerNote').innerHTML =
+                        'İlk kurulum: henüz kullanıcı yok. ' +
+                        '<a href="#" id="setupLink" style="color:var(--accent-teal);">' +
+                        'Yönetici hesabı oluştur</a>';
+                    document.getElementById('setupLink')
+                        .addEventListener('click', ilkKullaniciOlustur);
+                }
+            })
+            .catch(function () { /* durum alinamadi: varsayilan metin kalir */ });
+
+        function ilkKullaniciOlustur(e) {
+            e.preventDefault();
+            const u = document.getElementById('username').value.trim();
+            const p = document.getElementById('password').value;
+            if (!u || p.length < 6) {
+                alert('Kullanıcı adı ve en az 6 karakterli şifre girin.');
+                return;
+            }
+            fetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: u, password: p })
+            })
+            .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+            .then(function (res) {
+                if (res.ok) {
+                    alert('Yönetici hesabı oluşturuldu. Şimdi giriş yapabilirsiniz.');
+                    window.location.reload();
+                } else {
+                    alert(res.b.message || 'Hesap oluşturulamadı.');
+                }
+            })
+            .catch(function () { alert('Sunucuya ulaşılamadı.'); });
         }
     </script>
 </body>

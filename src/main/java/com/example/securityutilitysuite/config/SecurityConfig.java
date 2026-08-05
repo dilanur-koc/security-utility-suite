@@ -39,11 +39,19 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable()) // API + basit local proje icin kapatiyoruz
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/api/auth/**",
                                 "/login.html",
                                 "/css/**",
                                 "/js/**"
                         ).permitAll()
+                        // Kayit ucu ACIK BIRAKILIR ama kimin kayit olabilecegine
+                        // RegistrationService karar verir: sistemde hic kullanici
+                        // yoksa (ilk kurulum) serbest, sonrasinda yalnizca ADMIN.
+                        // Filtre seviyesinde kapatsaydik ilk kurulum imkansiz olurdu.
+                        .requestMatchers("/api/auth/register", "/api/auth/setup-status").permitAll()
+                        // h2-console tum veritabanina okuma/yazma erisimi verir.
+                        // Onceden "authenticated" yeterliydi; kayit da acik oldugu
+                        // icin herkes hesap acip veritabanina ulasabiliyordu.
+                        .requestMatchers("/h2-console/**").hasRole("ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
@@ -60,6 +68,10 @@ public class SecurityConfig {
                         .permitAll()
                 )
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                // h2-console kendini iframe icinde acar; varsayilan X-Frame-Options
+                // DENY bunu engelliyordu. SAMEORIGIN, disaridan gomulmeyi hala
+                // engeller ama konsolun calismasina izin verir.
+                .headers(h -> h.frameOptions(fo -> fo.sameOrigin()))
                 // /api/** icin: oturum yoksa 302 + login.html yerine 401 + JSON don.
                 // Sayfa istekleri (/index.html vb.) icin eski davranis (login sayfasina
                 // yonlendirme) aynen korunuyor.
