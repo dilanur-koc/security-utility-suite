@@ -4,6 +4,7 @@ import com.example.securityutilitysuite.dto.SslCheckRequest;
 import com.example.securityutilitysuite.dto.SslCheckResponse;
 import com.example.securityutilitysuite.model.SslCheckResult;
 import com.example.securityutilitysuite.repository.SslCheckResultRepository;
+import com.example.securityutilitysuite.security.NetworkGuard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -57,15 +58,23 @@ public class SslInspectorService {
     private static final int EC_MIN_BITS = 256;
 
     private final SslCheckResultRepository repository;
+    private final NetworkGuard networkGuard;
 
-    public SslInspectorService(SslCheckResultRepository repository) {
+    public SslInspectorService(SslCheckResultRepository repository, NetworkGuard networkGuard) {
         this.repository = repository;
+        this.networkGuard = networkGuard;
     }
 
     @Transactional
     public SslCheckResponse inspect(SslCheckRequest request) {
         String host = request.getDomain();
         int port = request.getPort();
+
+        // SSRF/ic ag taramasi korumasi. Bu modulde port alani da bulundugu
+        // icin kontrol ozellikle onemli: aksi halde arac, uygulamanin ag
+        // konumundan ic ag port tarayicisina donusurdu (baglanabilen porttan
+        // TLS hatasi, baglanamayandan zaman asimi doner; ikisi ayirt edilebilir).
+        networkGuard.verifyPublicTarget(host);
 
         Handshake hs;
         try {
@@ -216,6 +225,27 @@ public class SslInspectorService {
             findings.add(f("HIGH", "EC anahtarı çok kısa: " + keyBits + " bit."));
         }
 
+        // Zincirdeki ARA sertifikalar da denetlenir. Yalnizca yaprak sertifikaya
+        // bakmak, suresi dolmus bir ara sertifikayi gozden kacirir; tarayici
+        // ise zincirin tamamini dogruladigi icin siteyi yine de reddeder.
+        for (int i = 1; i < hs.chain().length; i++) {
+            if (!(hs.chain()[i] instanceof X509Certificate ara)) continue;
+            try {
+                ara.checkValidity();
+            } catch (CertificateExpiredException e) {
+                findings.add(f("HIGH", "Zincirdeki ara sertifikanın süresi dolmuş: "
+                        + kisaAd(ara.getSubjectX500Principal().getName())));
+            } catch (CertificateNotYetValidException e) {
+                findings.add(f("HIGH", "Zincirdeki ara sertifika henüz geçerli değil: "
+                        + kisaAd(ara.getSubjectX500Principal().getName())));
+            }
+            String araAlg = ara.getSigAlgName();
+            if (araAlg != null && (araAlg.toUpperCase().contains("SHA1")
+                    || araAlg.toUpperCase().contains("MD5"))) {
+                findings.add(f("HIGH", "Ara sertifikada zayıf imza algoritması: " + araAlg));
+            }
+        }
+
         String protocol = hs.protocol();
         if (protocol != null && (protocol.contains("1.0") || protocol.contains("1.1") || protocol.startsWith("SSL"))) {
             findings.add(f("HIGH", "Eski protokol sürümü kullanılıyor: " + protocol));
@@ -240,11 +270,37 @@ public class SslInspectorService {
         );
     }
 
+    /**
+     * Ayni alan adi icin YENI satir acmak yerine mevcut kaydi gunceller.
+     * Onceki halinde her denetim bir satir ekliyordu; ayni domain birkac kez
+     * kontrol edilince tablo gereksiz sisiyordu.
+     */
     private void kaydet(String domain, String issuer, LocalDateTime from, LocalDateTime to,
                         long daysRemaining, boolean expired) {
+        String kisaIssuer = (issuer != null && issuer.length() > 500)
+                ? issuer.substring(0, 500) : issuer;
+
+        var mevcut = repository.findByDomain(domain);
+        if (!mevcut.isEmpty()) {
+            SslCheckResult kayit = mevcut.get(0);
+            kayit.setIssuer(kisaIssuer);
+            kayit.setValidFrom(from);
+            kayit.setValidTo(to);
+            kayit.setDaysRemaining(daysRemaining);
+            kayit.setExpired(expired);
+            kayit.setCheckedAt(LocalDateTime.now());
+            repository.save(kayit);
+
+            // Gecmiste birikmis fazla satirlar varsa temizle
+            if (mevcut.size() > 1) {
+                repository.deleteAll(mevcut.subList(1, mevcut.size()));
+            }
+            return;
+        }
+
         repository.save(SslCheckResult.builder()
                 .domain(domain)
-                .issuer(issuer != null && issuer.length() > 500 ? issuer.substring(0, 500) : issuer)
+                .issuer(kisaIssuer)
                 .validFrom(from)
                 .validTo(to)
                 .daysRemaining(daysRemaining)
@@ -321,6 +377,18 @@ public class SslInspectorService {
             return ec.getParams().getCurve().getField().getFieldSize();
         }
         return 0;
+    }
+
+    /** DN icinden yalnizca CN kismini cikarir; tam DN cok uzun ve okunmaz. */
+    private String kisaAd(String dn) {
+        if (dn == null) return "bilinmiyor";
+        for (String part : dn.split(",")) {
+            String p = part.trim();
+            if (p.regionMatches(true, 0, "CN=", 0, 3)) {
+                return p.substring(3);
+            }
+        }
+        return dn.length() > 60 ? dn.substring(0, 60) + "…" : dn;
     }
 
     private String kisaHata(Exception ex) {

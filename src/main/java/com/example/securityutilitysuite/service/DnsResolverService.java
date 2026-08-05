@@ -20,6 +20,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  * DNS kayitlarini sorgular ve olasi spoofing/onbellek zehirlenmesi
@@ -50,6 +54,9 @@ public class DnsResolverService {
 
     private static final String TIMEOUT_MS = "3000";
     private static final String RETRIES = "1";
+
+    private static final int REVERSE_LOOKUP_LIMIT = 5;
+    private static final int REVERSE_TIMEOUT_SECONDS = 3;
 
     public DnsQueryResponse query(DnsQueryRequest request) {
         String domain = request.getDomain().toLowerCase();
@@ -133,6 +140,29 @@ public class DnsResolverService {
         }
     }
 
+    /** Tek bir kayit turunu sorgular; karsilastirma icin tum turleri cekmeye gerek yok. */
+    private List<String> lookupSingle(String domain, String resolverIp, String type) throws Exception {
+        Hashtable<String, String> env = new Hashtable<>();
+        env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.dns.DnsContextFactory");
+        env.put("com.sun.jndi.dns.timeout.initial", TIMEOUT_MS);
+        env.put("com.sun.jndi.dns.timeout.retries", RETRIES);
+        if (resolverIp != null) {
+            env.put(Context.PROVIDER_URL, "dns://" + resolverIp);
+        }
+
+        DirContext ctx = new InitialDirContext(env);
+        try {
+            Attributes attrs = ctx.getAttributes(domain, new String[]{type});
+            return degerleriOku(attrs.get(type));
+        } finally {
+            try {
+                ctx.close();
+            } catch (Exception ignored) {
+                // kapanis hatasi sonucu etkilemez
+            }
+        }
+    }
+
     private List<String> degerleriOku(Attribute attr) {
         List<String> values = new ArrayList<>();
         if (attr == null) return values;
@@ -164,10 +194,12 @@ public class DnsResolverService {
                 .forEach(entry -> {
                     long start = System.currentTimeMillis();
                     try {
-                        Map<String, List<String>> r = lookup(domain, entry.getValue());
+                        // Karsilastirma icin YALNIZCA A kaydi gerekiyor.
+                        // Onceki halinde her cozumleyiciye 7 tur soruluyordu:
+                        // 3 x 7 = 21 sorgunun 18'i bosa gidiyordu.
+                        List<String> a = lookupSingle(domain, entry.getValue(), "A");
                         answers.add(new DnsQueryResponse.ResolverAnswer(
-                                entry.getKey(), entry.getValue(),
-                                r.getOrDefault("A", List.of()),
+                                entry.getKey(), entry.getValue(), a,
                                 System.currentTimeMillis() - start, null));
                     } catch (Exception ex) {
                         answers.add(new DnsQueryResponse.ResolverAnswer(
@@ -197,33 +229,59 @@ public class DnsResolverService {
     // Ters DNS
     // ------------------------------------------------------------------
 
+    /**
+     * Ters DNS sorgulari ayri bir is parcaciginda ve zaman asimiyla calisir.
+     * {@link InetAddress#getCanonicalHostName()} zaman asimi parametresi kabul
+     * etmiyor; yanit vermeyen bir PTR sunucusu istegi uzun sure askida
+     * birakabiliyordu. Sure asilirsa o IP "cozumlenemedi" olarak isaretlenir.
+     */
     private List<DnsQueryResponse.ReverseLookup> tersDns(List<String> aRecords) {
-        List<DnsQueryResponse.ReverseLookup> result = new ArrayList<>();
-        for (String ip : aRecords.stream().limit(5).toList()) {
-            try {
-                InetAddress addr = InetAddress.getByName(ip);
-                String ptr = addr.getCanonicalHostName();
-
-                boolean confirmed = false;
-                if (!ptr.equals(ip)) {
-                    // Ileri dogrulama: PTR adi tekrar cozumlendiginde ayni IP'ye donuyor mu?
-                    try {
-                        for (InetAddress back : InetAddress.getAllByName(ptr)) {
-                            if (back.getHostAddress().equals(ip)) {
-                                confirmed = true;
-                                break;
-                            }
-                        }
-                    } catch (Exception ignored) {
-                        // cozumlenemiyorsa dogrulanmamis sayilir
-                    }
-                }
-                result.add(new DnsQueryResponse.ReverseLookup(ip, ptr.equals(ip) ? null : ptr, confirmed));
-            } catch (Exception ex) {
-                result.add(new DnsQueryResponse.ReverseLookup(ip, null, false));
-            }
+        List<String> hedefler = aRecords.stream().limit(REVERSE_LOOKUP_LIMIT).toList();
+        if (hedefler.isEmpty()) {
+            return List.of();
         }
-        return result;
+
+        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<DnsQueryResponse.ReverseLookup>> futures = hedefler.stream()
+                    .map(ip -> pool.submit(() -> tekTersDns(ip)))
+                    .toList();
+
+            List<DnsQueryResponse.ReverseLookup> result = new ArrayList<>();
+            for (int i = 0; i < futures.size(); i++) {
+                try {
+                    result.add(futures.get(i).get(REVERSE_TIMEOUT_SECONDS, TimeUnit.SECONDS));
+                } catch (Exception ex) {
+                    futures.get(i).cancel(true);
+                    result.add(new DnsQueryResponse.ReverseLookup(hedefler.get(i), null, false));
+                }
+            }
+            return result;
+        }
+    }
+
+    private DnsQueryResponse.ReverseLookup tekTersDns(String ip) {
+        try {
+            InetAddress addr = InetAddress.getByName(ip);
+            String ptr = addr.getCanonicalHostName();
+
+            boolean confirmed = false;
+            if (!ptr.equals(ip)) {
+                // Ileri dogrulama: PTR adi tekrar cozumlendiginde ayni IP'ye donuyor mu?
+                try {
+                    for (InetAddress back : InetAddress.getAllByName(ptr)) {
+                        if (back.getHostAddress().equals(ip)) {
+                            confirmed = true;
+                            break;
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // cozumlenemiyorsa dogrulanmamis sayilir
+                }
+            }
+            return new DnsQueryResponse.ReverseLookup(ip, ptr.equals(ip) ? null : ptr, confirmed);
+        } catch (Exception ex) {
+            return new DnsQueryResponse.ReverseLookup(ip, null, false);
+        }
     }
 
     // ------------------------------------------------------------------

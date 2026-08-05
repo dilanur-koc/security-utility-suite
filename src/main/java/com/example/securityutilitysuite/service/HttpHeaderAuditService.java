@@ -2,14 +2,12 @@ package com.example.securityutilitysuite.service;
 
 import com.example.securityutilitysuite.dto.HeaderAuditRequest;
 import com.example.securityutilitysuite.dto.HeaderAuditResponse;
+import com.example.securityutilitysuite.security.NetworkGuard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.net.Inet4Address;
-import java.net.InetAddress;
 import java.net.URI;
-import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -33,6 +31,12 @@ import java.util.Map;
  */
 @Service
 public class HttpHeaderAuditService {
+
+    private final NetworkGuard networkGuard;
+
+    public HttpHeaderAuditService(NetworkGuard networkGuard) {
+        this.networkGuard = networkGuard;
+    }
 
     private static final Logger log = LoggerFactory.getLogger(HttpHeaderAuditService.class);
 
@@ -62,7 +66,7 @@ public class HttpHeaderAuditService {
         try {
             int hops = 0;
             while (true) {
-                guardAgainstSsrf(currentUrl);
+                networkGuard.verifyPublicTarget(URI.create(currentUrl).getHost());
 
                 HttpRequest req = HttpRequest.newBuilder()
                         .uri(URI.create(currentUrl))
@@ -334,49 +338,6 @@ public class HttpHeaderAuditService {
      * kayit degisebilir), ama bu, dogrudan literal ic IP/host verilmesini ve
      * basit redirect tabanli SSRF'i engeller.
      */
-    private void guardAgainstSsrf(String rawUrl) {
-        URI uri = URI.create(rawUrl);
-        String host = uri.getHost();
-        if (host == null || host.isBlank()) {
-            throw new IllegalArgumentException("Adreste geçerli bir host yok");
-        }
-
-        InetAddress[] addresses;
-        try {
-            addresses = InetAddress.getAllByName(host);
-        } catch (UnknownHostException e) {
-            throw new IllegalArgumentException("Host çözülemedi: " + host);
-        }
-
-        for (InetAddress addr : addresses) {
-            if (isBlockedAddress(addr)) {
-                throw new IllegalArgumentException(
-                        "Hedef, iç ağ/özel/yerel bir adrese çözümleniyor (" + addr.getHostAddress()
-                                + "); güvenlik nedeniyle bu adreslere istek atılmıyor.");
-            }
-        }
-    }
-
-    private boolean isBlockedAddress(InetAddress addr) {
-        if (addr.isLoopbackAddress()      // 127.0.0.0/8, ::1
-                || addr.isLinkLocalAddress()   // 169.254.0.0/16 (bulut metadata dahil), fe80::/10
-                || addr.isSiteLocalAddress()   // 10/8, 172.16/12, 192.168/16, fc00::/7
-                || addr.isAnyLocalAddress()    // 0.0.0.0, ::
-                || addr.isMulticastAddress()) {
-            return true;
-        }
-        // 100.64.0.0/10 (Carrier-Grade NAT) - isSiteLocalAddress bunu yakalamaz.
-        if (addr instanceof Inet4Address) {
-            byte[] b = addr.getAddress();
-            int first = b[0] & 0xFF;
-            int second = b[1] & 0xFF;
-            if (first == 100 && second >= 64 && second <= 127) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     // ------------------------------------------------------------------
     // Yardimcilar
     // ------------------------------------------------------------------
