@@ -26,7 +26,8 @@ import java.util.Map;
  * - Puanlama agirliklidir: HSTS ve CSP gibi gercekten saldiri yuzeyini daraltan
  *   basliklar, X-XSS-Protection gibi artik onerilmeyen basliklardan daha
  *   degerlidir. Basligin sadece VARLIGI degil, DEGERI de incelenir — ornegin
- *   "unsafe-inline" iceren bir CSP, korumanin buyuk kismini kaybettirir.
+ *   script-src icinde "unsafe-inline" iceren bir CSP, korumanin buyuk
+ *   kismini kaybettirir (style-src icinde ise risk cok daha dusuktur).
  * - Modul durum tutmaz, veritabanina yazmaz.
  */
 @Service
@@ -166,15 +167,29 @@ public class HttpHeaderAuditService {
             String lower = csp.toLowerCase();
             String note = null;
             String status = "OK";
-            if (lower.contains("unsafe-inline")) {
+
+            // 'unsafe-inline' HANGI DIREKTIFTE oldugu belirleyicidir:
+            // script-src/default-src icinde ise XSS korumasi buyuk olcude
+            // etkisizlesir. style-src icinde ise risk cok daha dusuktur ve
+            // yaygin bir pratiktir (orn. GitHub boyle yapar). Ikisini ayni
+            // saymak, iyi yapilandirilmis siteleri haksiz yere cezalandirir.
+            boolean scriptUnsafeInline = direktifIceriyorMu(lower, "script-src", "'unsafe-inline'")
+                    || (!direktifVarMi(lower, "script-src")
+                        && direktifIceriyorMu(lower, "default-src", "'unsafe-inline'"));
+            boolean styleUnsafeInline = direktifIceriyorMu(lower, "style-src", "'unsafe-inline'");
+
+            if (scriptUnsafeInline) {
                 status = "WARN";
-                note = "'unsafe-inline' kullanılıyor; XSS koruması büyük ölçüde etkisiz.";
+                note = "script-src içinde 'unsafe-inline' var; XSS koruması büyük ölçüde etkisiz.";
             } else if (lower.contains("unsafe-eval")) {
                 status = "WARN";
                 note = "'unsafe-eval' kullanılıyor; dinamik kod çalıştırmaya izin veriyor.";
             } else if (lower.contains("default-src *") || lower.contains("script-src *")) {
                 status = "WARN";
                 note = "Joker (*) kaynak tanımı var; kısıtlama etkisiz kalıyor.";
+            } else if (styleUnsafeInline) {
+                // Puani dusurmez; yalnizca bilgi notu.
+                note = "style-src içinde 'unsafe-inline' var; script'e göre düşük riskli, yaygın bir kullanım.";
             }
             checks.add(check("Content-Security-Policy", true, csp, status, 25,
                     "Hangi kaynaklardan script/stil yüklenebileceğini kısıtlar; XSS'e karşı en güçlü savunma.", note));
@@ -341,6 +356,27 @@ public class HttpHeaderAuditService {
     // ------------------------------------------------------------------
     // Yardimcilar
     // ------------------------------------------------------------------
+
+    /** CSP icinde belirtilen direktif tanimli mi? */
+    private boolean direktifVarMi(String cspLower, String direktif) {
+        for (String parca : cspLower.split(";")) {
+            if (parca.trim().startsWith(direktif + " ") || parca.trim().equals(direktif)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Belirtilen direktif, verilen anahtar kelimeyi iceriyor mu? */
+    private boolean direktifIceriyorMu(String cspLower, String direktif, String anahtar) {
+        for (String parca : cspLower.split(";")) {
+            String t = parca.trim();
+            if (t.startsWith(direktif + " ") && t.contains(anahtar)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     private HeaderAuditResponse.HeaderCheck check(String name, boolean present, String value,
                                                   String status, int weight,
