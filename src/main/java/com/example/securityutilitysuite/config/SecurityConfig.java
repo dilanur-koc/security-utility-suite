@@ -1,5 +1,9 @@
 package com.example.securityutilitysuite.config;
 
+import com.example.securityutilitysuite.service.LoginAttemptService;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,14 +16,23 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.util.matcher.RequestMatcher;
+import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
 import java.util.Map;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    private final LoginAttemptService loginAttemptService;
+
+    public SecurityConfig(LoginAttemptService loginAttemptService) {
+        this.loginAttemptService = loginAttemptService;
+    }
 
     /** /api/** icin request.getServletPath() kontrolu - hicbir ozel matcher sinifina bagimli degil. */
     private static final RequestMatcher API_MATCHER =
@@ -37,6 +50,8 @@ public class SecurityConfig {
 
         http
                 .csrf(csrf -> csrf.disable()) // API + basit local proje icin kapatiyoruz
+                // BRUTE-FORCE RATE LIMITING FILTRESI
+                .addFilterBefore(new LoginRateLimitFilter(loginAttemptService, objectMapper), UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/login.html",
@@ -46,11 +61,8 @@ public class SecurityConfig {
                         // Kayit ucu ACIK BIRAKILIR ama kimin kayit olabilecegine
                         // RegistrationService karar verir: sistemde hic kullanici
                         // yoksa (ilk kurulum) serbest, sonrasinda yalnizca ADMIN.
-                        // Filtre seviyesinde kapatsaydik ilk kurulum imkansiz olurdu.
                         .requestMatchers("/api/auth/register", "/api/auth/setup-status").permitAll()
                         // h2-console tum veritabanina okuma/yazma erisimi verir.
-                        // Onceden "authenticated" yeterliydi; kayit da acik oldugu
-                        // icin herkes hesap acip veritabanina ulasabiliyordu.
                         .requestMatchers("/h2-console/**").hasRole("ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
@@ -58,7 +70,7 @@ public class SecurityConfig {
                 .formLogin(form -> form
                         .loginPage("/login.html")           // kendi giris sayfamiz
                         .loginProcessingUrl("/perform-login") // formun POST edecegi adres
-                        .defaultSuccessUrl("/index.html", true) // basarili girişte dashboard'a git
+                        .defaultSuccessUrl("/index.html", true) // basarili giriste dashboard'a git
                         .failureUrl("/login.html?error=true")
                         .permitAll()
                 )
@@ -68,13 +80,7 @@ public class SecurityConfig {
                         .permitAll()
                 )
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
-                // h2-console kendini iframe icinde acar; varsayilan X-Frame-Options
-                // DENY bunu engelliyordu. SAMEORIGIN, disaridan gomulmeyi hala
-                // engeller ama konsolun calismasina izin verir.
                 .headers(h -> h.frameOptions(fo -> fo.sameOrigin()))
-                // /api/** icin: oturum yoksa 302 + login.html yerine 401 + JSON don.
-                // Sayfa istekleri (/index.html vb.) icin eski davranis (login sayfasina
-                // yonlendirme) aynen korunuyor.
                 .exceptionHandling(ex -> ex
                         .defaultAuthenticationEntryPointFor(apiAuthEntryPoint, API_MATCHER)
                         .defaultAccessDeniedHandlerFor(apiAccessDeniedHandler, API_MATCHER)
@@ -107,5 +113,56 @@ public class SecurityConfig {
                     "message", "Bu işlem için yetkiniz yok."
             ));
         };
+    }
+
+    // =========================================================================
+    // BRUTE-FORCE ENGELLEME FILTRESI (RATE LIMIT FILTER)
+    // =========================================================================
+    private static class LoginRateLimitFilter extends OncePerRequestFilter {
+
+        private final LoginAttemptService loginAttemptService;
+        private final ObjectMapper objectMapper;
+
+        public LoginRateLimitFilter(LoginAttemptService loginAttemptService, ObjectMapper objectMapper) {
+            this.loginAttemptService = loginAttemptService;
+            this.objectMapper = objectMapper;
+        }
+
+        @Override
+        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+                throws ServletException, IOException {
+
+            if ("POST".equalsIgnoreCase(request.getMethod()) && "/perform-login".equals(request.getServletPath())) {
+                String clientIP = getClientIP(request);
+                String username = request.getParameter("username");
+
+                if (loginAttemptService.isBlocked(clientIP) || (username != null && loginAttemptService.isBlocked(username))) {
+                    response.setStatus(429); // 429 Too Many Requests
+                    response.setCharacterEncoding("UTF-8");
+
+                    if (request.getHeader("Accept") != null && request.getHeader("Accept").contains(MediaType.APPLICATION_JSON_VALUE)) {
+                        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                        objectMapper.writeValue(response.getWriter(), Map.of(
+                                "status", 429,
+                                "error", "Too Many Requests",
+                                "message", "Çok fazla başarısız giriş denemesi! Hesabınız geçici olarak kilitlendi."
+                        ));
+                    } else {
+                        response.sendRedirect("/login.html?blocked=true");
+                    }
+                    return;
+                }
+            }
+
+            filterChain.doFilter(request, response);
+        }
+
+        private String getClientIP(HttpServletRequest request) {
+            String xfHeader = request.getHeader("X-Forwarded-For");
+            if (xfHeader == null || xfHeader.isEmpty()) {
+                return request.getRemoteAddr();
+            }
+            return xfHeader.split(",")[0];
+        }
     }
 }

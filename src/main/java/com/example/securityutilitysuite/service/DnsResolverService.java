@@ -13,31 +13,9 @@ import javax.naming.directory.Attributes;
 import javax.naming.directory.DirContext;
 import javax.naming.directory.InitialDirContext;
 import java.net.InetAddress;
-import java.util.ArrayList;
-import java.util.Hashtable;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
+import java.util.concurrent.*;
 
-/**
- * DNS kayitlarini sorgular ve olasi spoofing/onbellek zehirlenmesi
- * belirtilerini analiz eder.
- *
- * Tasarim notlari:
- * - Sorgular JDK'nin kendi DNS saglayicisi (JNDI) uzerinden yapilir; harici
- *   bir kutuphane gerekmez.
- * - Spoofing tespiti dogrudan olcelemez. Bunun yerine ayni soru birden fazla
- *   BAGIMSIZ genel cozumleyiciye sorulur ve yanitlar karsilastirilir. Yanitlar
- *   ayrisiyorsa bu bir uyaridir — ancak CDN ve cografi yonlendirme de ayni
- *   etkiyi yarattigi icin bulgu KESIN degil, "incelenmeli" seviyesindedir.
- * - Modul durum tutmaz, veritabanina yazmaz: her sorgu bagimsizdir.
- */
 @Service
 public class DnsResolverService {
 
@@ -45,7 +23,6 @@ public class DnsResolverService {
 
     private static final String[] RECORD_TYPES = {"A", "AAAA", "MX", "TXT", "NS", "CNAME", "SOA"};
 
-    /** Bagimsiz isletmeciler — ayni sirketin sunucularini secmek karsilastirmayi anlamsiz kilardi. */
     private static final Map<String, String> PUBLIC_RESOLVERS = Map.of(
             "Google", "8.8.8.8",
             "Cloudflare", "1.1.1.1",
@@ -59,7 +36,11 @@ public class DnsResolverService {
     private static final int REVERSE_TIMEOUT_SECONDS = 3;
 
     public DnsQueryResponse query(DnsQueryRequest request) {
-        String domain = request.getDomain().toLowerCase();
+        if (request == null || request.getDomain() == null || request.getDomain().isBlank()) {
+            return DnsQueryResponse.failed("", "Geçersiz alan adı");
+        }
+
+        String domain = request.getDomain().trim().toLowerCase();
 
         Map<String, List<String>> records;
         try {
@@ -69,7 +50,7 @@ public class DnsResolverService {
             return DnsQueryResponse.failed(domain, kisaHata(ex));
         }
 
-        if (records.values().stream().allMatch(List::isEmpty)) {
+        if (records.values().stream().allMatch(list -> list == null || list.isEmpty())) {
             return DnsQueryResponse.failed(domain, "Hiçbir DNS kaydı bulunamadı");
         }
 
@@ -77,13 +58,13 @@ public class DnsResolverService {
         boolean consistent = true;
 
         if (request.isSpoofCheck()) {
-            resolvers = cozumleyicileriKarsilastir(domain);
+            resolvers = cozumleyicileriKarsilastirParalel(domain);
             consistent = tutarliMi(resolvers);
         }
 
-        List<DnsQueryResponse.ReverseLookup> reverse = tersDns(records.getOrDefault("A", List.of()));
-        List<DnsQueryResponse.Finding> findings =
-                bulgulariCikar(domain, records, resolvers, consistent, reverse);
+        List<String> aRecords = safeGetList(records, "A");
+        List<DnsQueryResponse.ReverseLookup> reverse = tersDns(aRecords);
+        List<DnsQueryResponse.Finding> findings = bulgulariCikar(domain, records, resolvers, consistent, reverse);
 
         return new DnsQueryResponse(domain, true, null, records, resolvers, consistent, reverse, findings);
     }
@@ -92,22 +73,8 @@ public class DnsResolverService {
     // Sorgulama
     // ------------------------------------------------------------------
 
-    /**
-     * @param resolverIp null ise sistemin varsayilan cozumleyicisi kullanilir.
-     *
-     * Her kayit turu AYRI sorgulanir. Tum turleri tek cagrida istemek bazi
-     * cozumleyicilerde (orn. systemd-resolved) "NOTIMP / response code 4"
-     * hatasina yol acar ve hicbir kayit donmez. Ayri sorgularda bir tur
-     * desteklenmese bile digerleri calismaya devam eder.
-     */
     private Map<String, List<String>> lookup(String domain, String resolverIp) throws Exception {
-        Hashtable<String, String> env = new Hashtable<>();
-        env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.dns.DnsContextFactory");
-        env.put("com.sun.jndi.dns.timeout.initial", TIMEOUT_MS);
-        env.put("com.sun.jndi.dns.timeout.retries", RETRIES);
-        if (resolverIp != null) {
-            env.put(Context.PROVIDER_URL, "dns://" + resolverIp);
-        }
+        Hashtable<String, String> env = createJndiEnv(resolverIp);
 
         DirContext ctx = new InitialDirContext(env);
         try {
@@ -119,29 +86,34 @@ public class DnsResolverService {
                     Attributes attrs = ctx.getAttributes(domain, new String[]{type});
                     result.put(type, degerleriOku(attrs.get(type)));
                 } catch (Exception ex) {
-                    // Bu tur desteklenmiyor veya kayit yok — digerlerine devam.
                     log.debug("{} kaydi alinamadi ({}): {}", type, domain, ex.getMessage());
-                    result.put(type, new ArrayList<>());
+                    result.put(type, Collections.emptyList());
                     if (ilkHata == null) ilkHata = ex;
                 }
             }
 
-            // Hicbir tur donmediyse gercek bir cozumleme hatasi var demektir.
             if (result.values().stream().allMatch(List::isEmpty) && ilkHata != null) {
                 throw ilkHata;
             }
             return result;
         } finally {
-            try {
-                ctx.close();
-            } catch (Exception ignored) {
-                // kapanis hatasi sonucu etkilemez
-            }
+            closeContextQuietly(ctx);
         }
     }
 
-    /** Tek bir kayit turunu sorgular; karsilastirma icin tum turleri cekmeye gerek yok. */
     private List<String> lookupSingle(String domain, String resolverIp, String type) throws Exception {
+        Hashtable<String, String> env = createJndiEnv(resolverIp);
+
+        DirContext ctx = new InitialDirContext(env);
+        try {
+            Attributes attrs = ctx.getAttributes(domain, new String[]{type});
+            return degerleriOku(attrs.get(type));
+        } finally {
+            closeContextQuietly(ctx);
+        }
+    }
+
+    private Hashtable<String, String> createJndiEnv(String resolverIp) {
         Hashtable<String, String> env = new Hashtable<>();
         env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.dns.DnsContextFactory");
         env.put("com.sun.jndi.dns.timeout.initial", TIMEOUT_MS);
@@ -149,28 +121,21 @@ public class DnsResolverService {
         if (resolverIp != null) {
             env.put(Context.PROVIDER_URL, "dns://" + resolverIp);
         }
-
-        DirContext ctx = new InitialDirContext(env);
-        try {
-            Attributes attrs = ctx.getAttributes(domain, new String[]{type});
-            return degerleriOku(attrs.get(type));
-        } finally {
-            try {
-                ctx.close();
-            } catch (Exception ignored) {
-                // kapanis hatasi sonucu etkilemez
-            }
-        }
+        return env;
     }
 
     private List<String> degerleriOku(Attribute attr) {
         List<String> values = new ArrayList<>();
         if (attr == null) return values;
+
+        NamingEnumeration<?> all = null;
         try {
-            NamingEnumeration<?> all = attr.getAll();
+            all = attr.getAll();
             while (all.hasMore()) {
-                String v = String.valueOf(all.next()).trim();
-                // TXT kayitlari tirnakli gelebilir
+                Object obj = all.next();
+                if (obj == null) continue;
+
+                String v = String.valueOf(obj).trim();
                 if (v.length() > 1 && v.startsWith("\"") && v.endsWith("\"")) {
                     v = v.substring(1, v.length() - 1);
                 }
@@ -178,43 +143,55 @@ public class DnsResolverService {
             }
         } catch (Exception ex) {
             log.debug("Kayit okunamadi: {}", ex.getMessage());
+        } finally {
+            if (all != null) {
+                try { all.close(); } catch (Exception ignored) {}
+            }
         }
         return values;
     }
 
     // ------------------------------------------------------------------
-    // Spoofing karsilastirmasi
+    // Spoofing Karsilastirmasi
     // ------------------------------------------------------------------
 
-    private List<DnsQueryResponse.ResolverAnswer> cozumleyicileriKarsilastir(String domain) {
-        List<DnsQueryResponse.ResolverAnswer> answers = new ArrayList<>();
+    private List<DnsQueryResponse.ResolverAnswer> cozumleyicileriKarsilastirParalel(String domain) {
+        ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
+        try {
+            List<Future<DnsQueryResponse.ResolverAnswer>> futures = PUBLIC_RESOLVERS.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(entry -> pool.submit(() -> tekResolverSorgula(domain, entry.getKey(), entry.getValue())))
+                    .toList();
 
-        PUBLIC_RESOLVERS.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> {
-                    long start = System.currentTimeMillis();
-                    try {
-                        // Karsilastirma icin YALNIZCA A kaydi gerekiyor.
-                        // Onceki halinde her cozumleyiciye 7 tur soruluyordu:
-                        // 3 x 7 = 21 sorgunun 18'i bosa gidiyordu.
-                        List<String> a = lookupSingle(domain, entry.getValue(), "A");
-                        answers.add(new DnsQueryResponse.ResolverAnswer(
-                                entry.getKey(), entry.getValue(), a,
-                                System.currentTimeMillis() - start, null));
-                    } catch (Exception ex) {
-                        answers.add(new DnsQueryResponse.ResolverAnswer(
-                                entry.getKey(), entry.getValue(), List.of(),
-                                System.currentTimeMillis() - start, kisaHata(ex)));
-                    }
-                });
+            List<DnsQueryResponse.ResolverAnswer> answers = new ArrayList<>();
+            for (Future<DnsQueryResponse.ResolverAnswer> future : futures) {
+                try {
+                    answers.add(future.get(3500, TimeUnit.MILLISECONDS));
+                } catch (Exception ex) {
+                    future.cancel(true);
+                }
+            }
+            return answers;
+        } finally {
+            // ExecutorService.close() takilmasini önlemek için shutdownNow
+            pool.shutdownNow();
+        }
+    }
 
-        return answers;
+    private DnsQueryResponse.ResolverAnswer tekResolverSorgula(String domain, String name, String ip) {
+        long start = System.currentTimeMillis();
+        try {
+            List<String> a = lookupSingle(domain, ip, "A");
+            return new DnsQueryResponse.ResolverAnswer(name, ip, a, System.currentTimeMillis() - start, null);
+        } catch (Exception ex) {
+            return new DnsQueryResponse.ResolverAnswer(name, ip, List.of(), System.currentTimeMillis() - start, kisaHata(ex));
+        }
     }
 
     private boolean tutarliMi(List<DnsQueryResponse.ResolverAnswer> answers) {
         Set<String> reference = null;
         for (DnsQueryResponse.ResolverAnswer a : answers) {
-            if (a.error() != null || a.aRecords().isEmpty()) continue;
+            if (a == null || a.error() != null || a.aRecords() == null || a.aRecords().isEmpty()) continue;
             Set<String> current = new LinkedHashSet<>(a.aRecords());
             if (reference == null) {
                 reference = current;
@@ -229,19 +206,18 @@ public class DnsResolverService {
     // Ters DNS
     // ------------------------------------------------------------------
 
-    /**
-     * Ters DNS sorgulari ayri bir is parcaciginda ve zaman asimiyla calisir.
-     * {@link InetAddress#getCanonicalHostName()} zaman asimi parametresi kabul
-     * etmiyor; yanit vermeyen bir PTR sunucusu istegi uzun sure askida
-     * birakabiliyordu. Sure asilirsa o IP "cozumlenemedi" olarak isaretlenir.
-     */
     private List<DnsQueryResponse.ReverseLookup> tersDns(List<String> aRecords) {
-        List<String> hedefler = aRecords.stream().limit(REVERSE_LOOKUP_LIMIT).toList();
-        if (hedefler.isEmpty()) {
-            return List.of();
+        if (aRecords == null || aRecords.isEmpty()) {
+            return Collections.emptyList();
         }
 
-        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+        List<String> hedefler = aRecords.stream()
+                .filter(Objects::nonNull)
+                .limit(REVERSE_LOOKUP_LIMIT)
+                .toList();
+
+        ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
+        try {
             List<Future<DnsQueryResponse.ReverseLookup>> futures = hedefler.stream()
                     .map(ip -> pool.submit(() -> tekTersDns(ip)))
                     .toList();
@@ -256,6 +232,8 @@ public class DnsResolverService {
                 }
             }
             return result;
+        } finally {
+            pool.shutdownNow();
         }
     }
 
@@ -265,8 +243,7 @@ public class DnsResolverService {
             String ptr = addr.getCanonicalHostName();
 
             boolean confirmed = false;
-            if (!ptr.equals(ip)) {
-                // Ileri dogrulama: PTR adi tekrar cozumlendiginde ayni IP'ye donuyor mu?
+            if (ptr != null && !ptr.equals(ip)) {
                 try {
                     for (InetAddress back : InetAddress.getAllByName(ptr)) {
                         if (back.getHostAddress().equals(ip)) {
@@ -274,11 +251,9 @@ public class DnsResolverService {
                             break;
                         }
                     }
-                } catch (Exception ignored) {
-                    // cozumlenemiyorsa dogrulanmamis sayilir
-                }
+                } catch (Exception ignored) {}
             }
-            return new DnsQueryResponse.ReverseLookup(ip, ptr.equals(ip) ? null : ptr, confirmed);
+            return new DnsQueryResponse.ReverseLookup(ip, Objects.equals(ptr, ip) ? null : ptr, confirmed);
         } catch (Exception ex) {
             return new DnsQueryResponse.ReverseLookup(ip, null, false);
         }
@@ -297,69 +272,79 @@ public class DnsResolverService {
 
         List<DnsQueryResponse.Finding> f = new ArrayList<>();
 
-        // --- Spoofing belirtisi ---
-        if (!resolvers.isEmpty() && !consistent) {
+        // Spoofing kontrolü
+        if (resolvers != null && !resolvers.isEmpty() && !consistent) {
             f.add(new DnsQueryResponse.Finding("HIGH",
-                    "Farklı çözümleyiciler farklı A kayıtları döndürdü. "
-                    + "Bu bir DNS spoofing belirtisi olabilir; ancak CDN ve coğrafi "
-                    + "yönlendirme de aynı sonucu verir, doğrulanmalı."));
+                    "Farklı çözümleyiciler farklı A kayıtları döndürdü. Bu bir DNS spoofing belirtisi olabilir; "
+                            + "ancak CDN ve coğrafi yönlendirme de aynı sonucu verir, doğrulanmalı."));
         }
 
-        // --- Yerel çözümleyici ile genel çözümleyiciler ayrışıyor mu ---
-        Set<String> local = new LinkedHashSet<>(records.getOrDefault("A", List.of()));
-        for (DnsQueryResponse.ResolverAnswer a : resolvers) {
-            if (a.error() == null && !a.aRecords().isEmpty()
-                    && !local.isEmpty() && !local.equals(new LinkedHashSet<>(a.aRecords()))) {
-                f.add(new DnsQueryResponse.Finding("MEDIUM",
-                        "Yerel çözümleyicinin yanıtı " + a.name() + " ile eşleşmiyor. "
-                        + "Yerel DNS önbelleği zehirlenmiş veya kurumsal bir yönlendirme olabilir."));
-                break;
+        // Yerel DNS Ayrışması
+        List<String> localA = safeGetList(records, "A");
+        Set<String> localSet = new LinkedHashSet<>(localA);
+        if (resolvers != null) {
+            for (DnsQueryResponse.ResolverAnswer a : resolvers) {
+                if (a != null && a.error() == null && a.aRecords() != null && !a.aRecords().isEmpty()
+                        && !localSet.isEmpty() && !localSet.equals(new LinkedHashSet<>(a.aRecords()))) {
+                    f.add(new DnsQueryResponse.Finding("MEDIUM",
+                            "Yerel çözümleyicinin yanıtı " + a.name() + " ile eşleşmiyor. "
+                                    + "Yerel DNS önbelleği zehirlenmiş veya kurumsal bir yönlendirme olabilir."));
+                    break;
+                }
             }
         }
 
-        // --- Özel IP aralığı ---
-        for (String ip : records.getOrDefault("A", List.of())) {
+        // Özel IP (Private / Loopback) Kontrolü
+        for (String ip : localA) {
             if (ozelAdresMi(ip)) {
                 f.add(new DnsQueryResponse.Finding("MEDIUM",
                         "A kaydı özel/yerel bir adrese işaret ediyor: " + ip
-                        + " — DNS rebinding veya yanlış yapılandırma göstergesi olabilir."));
+                                + " — DNS rebinding veya yanlış yapılandırma göstergesi olabilir."));
                 break;
             }
         }
 
-        // --- E-posta kimlik doğrulama kayıtları ---
-        List<String> txt = records.getOrDefault("TXT", List.of());
-        boolean hasSpf = txt.stream().anyMatch(t -> t.toLowerCase().startsWith("v=spf1"));
-        boolean hasMx = !records.getOrDefault("MX", List.of()).isEmpty();
+        // E-Posta Güvenlik Kayıtları (SPF / DMARC / MX)
+        List<String> txtRecords = safeGetList(records, "TXT");
+        boolean hasMx = !safeGetList(records, "MX").isEmpty();
+        boolean hasSpf = txtRecords.stream().anyMatch(t -> t != null && t.toLowerCase().startsWith("v=spf1"));
 
         if (!hasSpf) {
             f.add(new DnsQueryResponse.Finding(hasMx ? "HIGH" : "MEDIUM",
-                    "SPF kaydı yok. Alan adı adına sahte e-posta gönderimi kolaylaşır."));
-        }
-        if (hasMx && txt.stream().noneMatch(t -> t.toLowerCase().contains("dkim"))) {
-            f.add(new DnsQueryResponse.Finding("LOW",
-                    "Kök alan adında DKIM işareti görülmedi (seçici alt alanda olabilir)."));
+                    "SPF kaydı bulunamadı. Alan adı adına sahte e-posta gönderimi riski var."));
         }
 
-        // --- Ad sunucusu sayisi ---
-        int ns = records.getOrDefault("NS", List.of()).size();
-        if (ns == 1) {
+        // Ad Sunucusu (NS) Kontrolü
+        int nsCount = safeGetList(records, "NS").size();
+        if (nsCount == 1) {
             f.add(new DnsQueryResponse.Finding("MEDIUM",
-                    "Tek ad sunucusu tanımlı. Tek nokta arızası riski var."));
+                    "Tek ad sunucusu (NS) tanımlı. Tek nokta arızası (SPOF) riski var."));
         }
 
-        // --- Ters DNS dogrulamasi ---
-        long unconfirmed = reverse.stream().filter(r -> !r.forwardConfirmed()).count();
-        if (!reverse.isEmpty() && unconfirmed == reverse.size()) {
-            f.add(new DnsQueryResponse.Finding("LOW",
-                    "Hiçbir A kaydı ileri doğrulamalı ters DNS ile eşleşmedi. "
-                    + "Barındırma sağlayıcılarında bu normal olabilir."));
+        // Ters DNS Doğrulaması
+        if (reverse != null && !reverse.isEmpty()) {
+            long unconfirmed = reverse.stream().filter(r -> r != null && !r.forwardConfirmed()).count();
+            if (unconfirmed == reverse.size()) {
+                f.add(new DnsQueryResponse.Finding("LOW",
+                        "Hiçbir A kaydı ileri doğrulamalı ters DNS ile eşleşmedi."));
+            }
         }
 
         return f;
     }
 
+    // ------------------------------------------------------------------
+    // Yardımcı Metodlar
+    // ------------------------------------------------------------------
+
+    private List<String> safeGetList(Map<String, List<String>> map, String key) {
+        if (map == null) return Collections.emptyList();
+        List<String> list = map.get(key);
+        return list != null ? list : Collections.emptyList();
+    }
+
     private boolean ozelAdresMi(String ip) {
+        if (ip == null || ip.isBlank()) return false;
         try {
             InetAddress a = InetAddress.getByName(ip);
             return a.isSiteLocalAddress() || a.isLoopbackAddress()
@@ -369,7 +354,16 @@ public class DnsResolverService {
         }
     }
 
+    private void closeContextQuietly(DirContext ctx) {
+        if (ctx != null) {
+            try {
+                ctx.close();
+            } catch (Exception ignored) {}
+        }
+    }
+
     private String kisaHata(Exception ex) {
+        if (ex == null) return "Unknown Error";
         String msg = ex.getMessage();
         if (msg == null || msg.isBlank()) return ex.getClass().getSimpleName();
         return msg.length() > 200 ? msg.substring(0, 200) + "…" : msg;

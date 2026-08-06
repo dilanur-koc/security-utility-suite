@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 
 public record RegisterRequest(
         @NotBlank @Size(min = 3, max = 50) String username,
-        @NotBlank @Size(min = 6) String password,
+        @NotBlank @Size(min = 8, max = 64, message = "Şifre en az 8 karakter olmalıdır") String password,
         @Email String email
 ) {
 }

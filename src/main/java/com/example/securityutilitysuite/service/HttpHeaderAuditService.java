@@ -331,11 +331,11 @@ public class HttpHeaderAuditService {
     }
 
     private String harfNotu(int score) {
-        if (score >= 90) return "A";
-        if (score >= 75) return "B";
-        if (score >= 60) return "C";
-        if (score >= 40) return "D";
-        if (score >= 20) return "E";
+        if (score >= 85) return "A+";
+        if (score >= 70) return "A";
+        if (score >= 55) return "B";
+        if (score >= 40) return "C";
+        if (score >= 25) return "D";
         return "F";
     }
 

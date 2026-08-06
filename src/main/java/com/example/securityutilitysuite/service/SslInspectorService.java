@@ -65,7 +65,13 @@ public class SslInspectorService {
         this.networkGuard = networkGuard;
     }
 
-    @Transactional
+    // NOT: Burada kasitli olarak @Transactional YOK. TLS el sikismasi yavas
+    // bir ag islemi; bunu bir DB transaction'i icine almak, handshake suresince
+    // bir baglanti havuzu baglantisini bosuna acik tutar (Port Scanner'daki
+    // ayni sorunun bir benzeri, orada da duzeltilmisti). degerlendir() icindeki
+    // repository.save() cagrilari Spring Data JPA tarafindan zaten kendi
+    // basina transactional calisir; ikisi ayni akista birlikte calismiyor,
+    // aralarinda atomiklik gerekmiyor.
     public SslCheckResponse inspect(SslCheckRequest request) {
         String host = request.getDomain();
         int port = request.getPort();
