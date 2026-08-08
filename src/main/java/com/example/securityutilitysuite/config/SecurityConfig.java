@@ -1,5 +1,6 @@
 package com.example.securityutilitysuite.config;
 
+import com.example.securityutilitysuite.security.ClientIpResolver;
 import com.example.securityutilitysuite.service.LoginAttemptService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -11,6 +12,10 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -29,14 +34,27 @@ import java.util.Map;
 public class SecurityConfig {
 
     private final LoginAttemptService loginAttemptService;
+    private final ClientIpResolver clientIpResolver;
 
-    public SecurityConfig(LoginAttemptService loginAttemptService) {
+    public SecurityConfig(LoginAttemptService loginAttemptService,
+                          ClientIpResolver clientIpResolver) {
         this.loginAttemptService = loginAttemptService;
+        this.clientIpResolver = clientIpResolver;
     }
 
-    /** /api/** icin request.getServletPath() kontrolu - hicbir ozel matcher sinifina bagimli degil. */
-    private static final RequestMatcher API_MATCHER =
-            request -> request.getServletPath().startsWith("/api/");
+    /**
+     * /api/** eslesmesi. getServletPath() bazi servlet yapilandirmalarinda
+     * bos donebildigi icin getRequestURI() kullaniliyor; baglam yolu varsa
+     * onu da hesaba katar.
+     */
+    private static final RequestMatcher API_MATCHER = request -> {
+        String uri = request.getRequestURI();
+        String context = request.getContextPath();
+        if (context != null && !context.isEmpty() && uri.startsWith(context)) {
+            uri = uri.substring(context.length());
+        }
+        return uri.startsWith("/api/");
+    };
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -49,9 +67,34 @@ public class SecurityConfig {
         AccessDeniedHandler apiAccessDeniedHandler = jsonAccessDeniedHandler(objectMapper);
 
         http
-                .csrf(csrf -> csrf.disable()) // API + basit local proje icin kapatiyoruz
+                // CSRF korumasi ACIK. Uygulama oturum cerezi (JSESSIONID) ile
+                // kimlik dogruladigi icin, koruma olmadan baska bir site
+                // kullanicinin tarayicisina bizim adimiza POST yaptirabilirdi
+                // (orn. onun oturumuyla tarama baslatmak).
+                //
+                // Token cerezde tasinir (XSRF-TOKEN, HttpOnly degil) ki arayuz
+                // JavaScript'i okuyup X-XSRF-TOKEN basligiyla geri gonderebilsin.
+                //
+                // Duz isleyici kullaniliyor: Spring'in varsayilan XOR'lu
+                // isleyicisinde cerezdeki HAM token ile sunucunun bekledigi
+                // deger farkli olur ve arayuzden gelen her POST 403 donerdi.
+                // Odunc: BREACH'e karsi ek karistirma yok; yerel kullanim
+                // icin kabul edilebilir.
+                //
+                // h2-console kendi formlarini gonderdigi ve token ekleyemedigi
+                // icin kapsam disi; zaten yalnizca ADMIN erisebiliyor.
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                        .ignoringRequestMatchers("/h2-console/**")
+                )
+                // Spring token'i "gerektiginde" uretir; o durumda sayfa ilk
+                // yuklendiginde cerez olusmaz ve ilk POST basarisiz olurdu.
+                // Bu filtre token'i her istekte zorla uretir.
+                .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
                 // BRUTE-FORCE RATE LIMITING FILTRESI
-                .addFilterBefore(new LoginRateLimitFilter(loginAttemptService, objectMapper), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new LoginRateLimitFilter(loginAttemptService, clientIpResolver, objectMapper),
+                        UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/login.html",
@@ -121,10 +164,14 @@ public class SecurityConfig {
     private static class LoginRateLimitFilter extends OncePerRequestFilter {
 
         private final LoginAttemptService loginAttemptService;
+        private final ClientIpResolver clientIpResolver;
         private final ObjectMapper objectMapper;
 
-        public LoginRateLimitFilter(LoginAttemptService loginAttemptService, ObjectMapper objectMapper) {
+        public LoginRateLimitFilter(LoginAttemptService loginAttemptService,
+                                    ClientIpResolver clientIpResolver,
+                                    ObjectMapper objectMapper) {
             this.loginAttemptService = loginAttemptService;
+            this.clientIpResolver = clientIpResolver;
             this.objectMapper = objectMapper;
         }
 
@@ -132,11 +179,13 @@ public class SecurityConfig {
         protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
                 throws ServletException, IOException {
 
-            if ("POST".equalsIgnoreCase(request.getMethod()) && "/perform-login".equals(request.getServletPath())) {
-                String clientIP = getClientIP(request);
+            if ("POST".equalsIgnoreCase(request.getMethod())
+                    && request.getRequestURI().endsWith("/perform-login")) {
+
+                String clientIP = clientIpResolver.resolve(request);
                 String username = request.getParameter("username");
 
-                if (loginAttemptService.isBlocked(clientIP) || (username != null && loginAttemptService.isBlocked(username))) {
+                if (loginAttemptService.engelliMi(clientIP, username)) {
                     response.setStatus(429); // 429 Too Many Requests
                     response.setCharacterEncoding("UTF-8");
 
@@ -157,12 +206,27 @@ public class SecurityConfig {
             filterChain.doFilter(request, response);
         }
 
-        private String getClientIP(HttpServletRequest request) {
-            String xfHeader = request.getHeader("X-Forwarded-For");
-            if (xfHeader == null || xfHeader.isEmpty()) {
-                return request.getRemoteAddr();
+    }
+
+    /**
+     * CSRF token'ini her istekte zorla uretir.
+     *
+     * Spring token'i tembel (deferred) uretir: kimse istemezse olusturulmaz
+     * ve XSRF-TOKEN cerezi yazilmaz. Arayuz cerezi okumak zorunda oldugu
+     * icin, cerez yoksa ilk POST 403 doner.
+     */
+    private static class CsrfCookieFilter extends OncePerRequestFilter {
+
+        @Override
+        protected void doFilterInternal(HttpServletRequest request,
+                                        HttpServletResponse response,
+                                        FilterChain filterChain)
+                throws ServletException, IOException {
+            CsrfToken token = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+            if (token != null) {
+                token.getToken();   // uretimi tetikler, cerez yazilir
             }
-            return xfHeader.split(",")[0];
+            filterChain.doFilter(request, response);
         }
     }
 }

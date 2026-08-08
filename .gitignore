@@ -19,3 +19,9 @@ build/
 
 # H2 dosya tabanli veritabani
 data/
+
+# Yerel test artiklari — oturum cerezi ve duz metin parola iceriyordu,
+# public depoya girmemeli.
+cookies.txt
+*.cookies
+login.sh

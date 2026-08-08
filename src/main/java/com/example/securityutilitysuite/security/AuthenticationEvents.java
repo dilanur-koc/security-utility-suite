@@ -9,43 +9,45 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+/**
+ * Giris basari/basarisizlik olaylarini dinleyip sayaclari gunceller.
+ *
+ * IP adresi {@link ClientIpResolver} uzerinden alinir; boylece
+ * X-Forwarded-For basligi yalnizca guvenilir bir vekilden geldiginde
+ * dikkate alinir. Onceki surumde baslik sorgusuz kabul edildigi icin
+ * saldirgan her istekte farkli bir deger gonderip sayaci sifirlayabiliyordu.
+ */
 @Component
 public class AuthenticationEvents {
 
     private final LoginAttemptService loginAttemptService;
+    private final ClientIpResolver clientIpResolver;
 
-    public AuthenticationEvents(LoginAttemptService loginAttemptService) {
+    public AuthenticationEvents(LoginAttemptService loginAttemptService,
+                                ClientIpResolver clientIpResolver) {
         this.loginAttemptService = loginAttemptService;
+        this.clientIpResolver = clientIpResolver;
     }
 
     @EventListener
     public void onSuccess(AuthenticationSuccessEvent event) {
-        String clientIP = getClientIP();
-        String username = event.getAuthentication().getName();
-        
-        loginAttemptService.loginSucceeded(clientIP);
-        loginAttemptService.loginSucceeded(username);
+        loginAttemptService.basariliGiris(istemciIp(), event.getAuthentication().getName());
     }
 
     @EventListener
     public void onFailure(AuthenticationFailureBadCredentialsEvent event) {
-        String clientIP = getClientIP();
-        String username = (String) event.getAuthentication().getPrincipal();
-
-        loginAttemptService.loginFailed(clientIP);
-        loginAttemptService.loginFailed(username);
+        Object principal = event.getAuthentication().getPrincipal();
+        String kullaniciAdi = (principal instanceof String s) ? s : String.valueOf(principal);
+        loginAttemptService.basarisizGiris(istemciIp(), kullaniciAdi);
     }
 
-    private String getClientIP() {
-        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        if (attributes != null) {
-            HttpServletRequest request = attributes.getRequest();
-            String xfHeader = request.getHeader("X-Forwarded-For");
-            if (xfHeader == null || xfHeader.isEmpty()) {
-                return request.getRemoteAddr();
-            }
-            return xfHeader.split(",")[0];
+    private String istemciIp() {
+        ServletRequestAttributes attributes =
+                (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return "bilinmiyor";
         }
-        return "127.0.0.1";
+        HttpServletRequest request = attributes.getRequest();
+        return clientIpResolver.resolve(request);
     }
 }

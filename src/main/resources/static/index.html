@@ -436,9 +436,14 @@
         <div class="status-ticker"><span class="pulse-dot me-1"></span> sistem <span class="value">çevrimiçi</span> · 3 modül</div>
       </div>
     </div>
-    <div class="status-ticker font-mono text-end">
-      <span id="clock">--:--:--</span><br>
-      <span class="text-muted">oturum: </span><span class="value">yerel</span>
+    <div class="d-flex align-items-center gap-3">
+      <div class="status-ticker font-mono text-end">
+        <span id="clock">--:--:--</span><br>
+        <span class="text-muted">oturum: </span><span class="value">yerel</span>
+      </div>
+      <button class="btn btn-sm btn-outline-suite" onclick="logout()" title="Çıkış yap">
+        <i class="bi bi-box-arrow-right"></i>
+      </button>
     </div>
   </div>
 </nav>
@@ -1290,6 +1295,52 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
+/* ==========================================================
+   CSRF korumali istek yardimcisi
+
+   Sunucu token'i XSRF-TOKEN cerezinde tasiyor. Veri degistiren her
+   istekte (POST/PUT/PATCH/DELETE) bu token X-XSRF-TOKEN basligiyla
+   geri gonderilmeli, aksi halde sunucu 403 doner.
+
+   Tum cagrilar tek yerden gectigi icin her fetch'e ayri baslik eklemek
+   gerekmiyor; yeni modul eklendiginde de unutulmuyor.
+   ========================================================== */
+function csrfToken() {
+  const m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function secureFetch(url, options) {
+  const opts = options ? Object.assign({}, options) : {};
+  const method = (opts.method || "GET").toUpperCase();
+
+  if (["POST", "PUT", "PATCH", "DELETE"].indexOf(method) !== -1) {
+    const token = csrfToken();
+    opts.headers = Object.assign({}, opts.headers);
+    if (token) opts.headers["X-XSRF-TOKEN"] = token;
+  }
+  return window.fetch(url, opts);
+}
+
+/* Cikis: CSRF acikken /logout yalnizca POST kabul eder. */
+function logout() {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/logout";
+  const t = csrfToken();
+  if (t) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "_csrf";
+    input.value = t;
+    form.appendChild(input);
+  }
+  document.body.appendChild(form);
+  form.submit();
+}
+</script>
+
+<script>
 
 (function(){
   "use strict";
@@ -1384,7 +1435,7 @@
     scanProgress.classList.remove("d-none");
 
     try {
-      const res = await fetch(API_BASE, {
+      const res = await secureFetch(API_BASE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -1427,7 +1478,7 @@
 
   async function loadHistory(){
     try {
-      const res = await fetch(API_BASE + "/history?page=0&size=20");
+      const res = await secureFetch(API_BASE + "/history?page=0&size=20");
       if (!res.ok) throw new Error("Geçmiş alınamadı");
       const page = await res.json();
       const items = page.content || [];
@@ -1487,7 +1538,7 @@
 
   async function loadIntegrityFiles(){
     try {
-      const res = await fetch(INTEGRITY_API + "/files");
+      const res = await secureFetch(INTEGRITY_API + "/files");
       if (!res.ok) throw new Error("Liste alınamadı");
       const items = await res.json();
 
@@ -1529,7 +1580,7 @@
 
   async function checkOne(id){
     try {
-      const res = await fetch(`${INTEGRITY_API}/check/${id}`, { method: "POST" });
+      const res = await secureFetch(`${INTEGRITY_API}/check/${id}`, { method: "POST" });
       if (!res.ok) throw new Error("Kontrol başarısız");
       loadIntegrityFiles();
       loadDashboardStats();
@@ -1540,7 +1591,7 @@
 
   async function deleteOne(id){
     try {
-      const res = await fetch(`${INTEGRITY_API}/files/${id}`, { method: "DELETE" });
+      const res = await secureFetch(`${INTEGRITY_API}/files/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Silme başarısız");
       loadIntegrityFiles();
       loadDashboardStats();
@@ -1557,7 +1608,7 @@
     baselineBtn.disabled = true;
 
     try {
-      const res = await fetch(INTEGRITY_API + "/baseline", {
+      const res = await secureFetch(INTEGRITY_API + "/baseline", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filePath })
@@ -1584,7 +1635,7 @@
   document.getElementById("checkAllBtn").addEventListener("click", async function(){
     this.disabled = true;
     try {
-      const res = await fetch(INTEGRITY_API + "/check-all", { method: "POST" });
+      const res = await secureFetch(INTEGRITY_API + "/check-all", { method: "POST" });
       if (!res.ok) throw new Error("Toplu kontrol başarısız");
       loadIntegrityFiles();
       loadDashboardStats();
@@ -1662,7 +1713,7 @@
 
   async function loadAlertHistory(){
     try {
-      const res = await fetch(LOGS_API + "/alerts?page=0&size=50");
+      const res = await secureFetch(LOGS_API + "/alerts?page=0&size=50");
       if (!res.ok) throw new Error("Geçmiş alınamadı");
       const page = await res.json();
       renderAlerts(page.content || []);
@@ -1705,7 +1756,7 @@
 
     analyzeBtn.disabled = true;
     try {
-      const res = await fetch(LOGS_API + "/analyze", {
+      const res = await secureFetch(LOGS_API + "/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ logContent, logSource })
@@ -1865,7 +1916,7 @@
 
   async function loadDashboardStats(){
     try {
-      const res = await fetch(STATS_API);
+      const res = await secureFetch(STATS_API);
       if (!res.ok) throw new Error("İstatistikler alınamadı (" + res.status + ")");
       const data = await res.json();
 
@@ -2070,7 +2121,7 @@ function closeSidebar(){
     };
 
     try {
-      const res = await fetch("/api/v1/ssl/check", {
+      const res = await secureFetch("/api/v1/ssl/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -2191,7 +2242,7 @@ function closeSidebar(){
     };
 
     try {
-      const res = await fetch("/api/v1/dns/query", {
+      const res = await secureFetch("/api/v1/dns/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -2333,7 +2384,7 @@ function closeSidebar(){
     };
 
     try {
-      const res = await fetch("/api/v1/subnet/analyze", {
+      const res = await secureFetch("/api/v1/subnet/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -2467,7 +2518,7 @@ function closeSidebar(){
     if (url && !/^https?:\/\//i.test(url)) { url = "https://" + url; }
 
     try {
-      const res = await fetch("/api/v1/headers/audit", {
+      const res = await secureFetch("/api/v1/headers/audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: url, followRedirects: document.getElementById("hdrRedirect").checked })

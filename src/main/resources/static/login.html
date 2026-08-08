@@ -164,9 +164,37 @@
     </div>
 
     <script>
+        /* CSRF: sunucu token'i XSRF-TOKEN cerezinde gonderiyor. Bu sayfa
+           statik HTML oldugu icin token sunucu tarafinda forma gomulemiyor;
+           JavaScript ile okuyup gonderim aninda ekliyoruz. */
+        function csrfToken() {
+            const m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+            return m ? decodeURIComponent(m[1]) : null;
+        }
+
+        document.querySelector('form[action="/perform-login"]')
+            .addEventListener('submit', function () {
+                const t = csrfToken();
+                if (!t) return;
+                let input = document.getElementById('csrfField');
+                if (!input) {
+                    input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = '_csrf';
+                    input.id = 'csrfField';
+                    this.appendChild(input);
+                }
+                input.value = t;
+            });
+
         const params = new URLSearchParams(window.location.search);
         if (params.get('error') === 'true') {
             document.getElementById('errorMsg').style.display = 'block';
+        }
+        if (params.get('blocked') === 'true') {
+            const e = document.getElementById('errorMsg');
+            e.textContent = 'Çok fazla başarısız deneme. Lütfen 15 dakika sonra tekrar deneyin.';
+            e.style.display = 'block';
         }
         if (params.get('logout') === 'true') {
             document.getElementById('logoutMsg').style.display = 'block';
@@ -196,9 +224,13 @@
                 alert('Kullanıcı adı ve en az 6 karakterli şifre girin.');
                 return;
             }
+            const headers = { 'Content-Type': 'application/json' };
+            const t = csrfToken();
+            if (t) headers['X-XSRF-TOKEN'] = t;
+
             fetch('/api/auth/register', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: headers,
                 body: JSON.stringify({ username: u, password: p })
             })
             .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
