@@ -969,6 +969,89 @@
 
 
 
+
+  <!-- ==================== BASE64 / HEX CONVERTER ==================== -->
+  <div id="ws-base64" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="card-suite p-3 p-lg-4">
+          <form id="encForm">
+            <div class="mb-3">
+              <label class="form-label" for="encInput">Girdi</label>
+              <textarea class="form-control font-mono" id="encInput" rows="7"
+                        placeholder="Metin veya kodlanmış değer..." required></textarea>
+            </div>
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label" for="encFormat">Biçim</label>
+                <select class="form-select" id="encFormat">
+                  <option value="BASE64">Base64</option>
+                  <option value="BASE64URL">Base64URL</option>
+                  <option value="HEX">Hex</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label" for="encOp">İşlem</label>
+                <select class="form-select" id="encOp">
+                  <option value="ENCODE">Kodla</option>
+                  <option value="DECODE">Çöz</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-scan w-100" id="encBtn">
+              <i class="bi bi-arrow-left-right"></i> Dönüştür
+            </button>
+            <div id="encError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+          </form>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div id="encEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-arrow-left-right d-block mb-2"></i>
+            Dönüştürmek istediğiniz değeri soldan girin.
+          </div>
+        </div>
+
+        <div id="encResult" class="d-none">
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="font-display mb-0">Sonuç</h6>
+              <button class="btn btn-sm btn-outline-suite" id="encCopy">
+                <i class="bi bi-clipboard"></i> Kopyala
+              </button>
+            </div>
+            <div class="scan-output" id="encOutput" style="min-height:90px;"></div>
+            <div class="row g-2 mt-3">
+              <div class="col-4"><div class="stat-tile">
+                <div class="stat-value" id="encBytes" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Bayt</div></div></div>
+              <div class="col-4"><div class="stat-tile">
+                <div class="stat-value" id="encIn" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Girdi</div></div></div>
+              <div class="col-4"><div class="stat-tile">
+                <div class="stat-value" id="encOut" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Çıktı</div></div></div>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">Tüm Gösterimler</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0"><tbody id="encAll"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <h6 class="font-display mb-3">Bulgular</h6>
+            <div id="encFindings"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== HTTP SECURITY HEADERS ==================== -->
   <div id="ws-headers" class="d-none">
     <div class="row g-4">
@@ -2596,6 +2679,106 @@ function closeSidebar(){
            +   '<td class="font-mono" style="font-size:.74rem;word-break:break-all;">' + esc(raw[k]) + '</td>'
            + '</tr>';
     }).join("");
+  }
+})();
+
+/* ==========================================================
+   Base64 / Hex Converter
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = { CRITICAL:{c:"#e5484d",t:"Kritik"}, HIGH:{c:"#e5484d",t:"Yüksek"},
+                MEDIUM:{c:"#f0a93b",t:"Orta"},     LOW:{c:"#2fd8c8",t:"Düşük"} };
+
+  function esc(v){
+    const t = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+            .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  const form = document.getElementById("encForm");
+  if (!form) return;
+
+  let sonCikti = "";
+
+  const kopyaBtn = document.getElementById("encCopy");
+  if (kopyaBtn) {
+    kopyaBtn.addEventListener("click", function(){
+      navigator.clipboard.writeText(sonCikti).then(function(){
+        kopyaBtn.innerHTML = '<i class="bi bi-check2"></i> Kopyalandı';
+        setTimeout(function(){
+          kopyaBtn.innerHTML = '<i class="bi bi-clipboard"></i> Kopyala';
+        }, 1500);
+      });
+    });
+  }
+
+  form.addEventListener("submit", async function(e){
+    e.preventDefault();
+    const err = document.getElementById("encError");
+    const btn = document.getElementById("encBtn");
+    err.textContent = "";
+    btn.disabled = true;
+
+    try {
+      const res = await secureFetch("/api/v1/encode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: document.getElementById("encInput").value,
+          format: document.getElementById("encFormat").value,
+          operation: document.getElementById("encOp").value
+        })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        throw new Error(body.fields ? Object.values(body.fields).join(" · ")
+                                    : (body.message || "Dönüşüm başarısız (" + res.status + ")"));
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function render(r){
+    document.getElementById("encEmpty").classList.add("d-none");
+    document.getElementById("encResult").classList.remove("d-none");
+
+    sonCikti = r.output;
+    document.getElementById("encOutput").textContent = r.output;
+    document.getElementById("encBytes").textContent = r.byteLength;
+    document.getElementById("encIn").textContent = r.inputLength;
+    document.getElementById("encOut").textContent = r.outputLength;
+
+    const satir = function(k, v){
+      return '<tr><td class="text-muted" style="width:22%;">' + k + '</td>'
+           + '<td class="font-mono" style="font-size:.76rem;word-break:break-all;">'
+           + esc(v) + '</td></tr>';
+    };
+    document.getElementById("encAll").innerHTML =
+        satir("Metin (UTF-8)", r.asText !== null ? r.asText : "— (ikili veri)")
+      + satir("Base64", r.asBase64)
+      + satir("Base64URL", r.asBase64Url)
+      + satir("Hex", r.asHex);
+
+    const fw = document.getElementById("encFindings");
+    if (!r.findings || r.findings.length === 0) {
+      fw.innerHTML = '<div style="color:#2fd8c8;font-size:.86rem;">'
+                   + '<i class="bi bi-check-circle"></i> Dikkat çeken bir şey yok.</div>';
+    } else {
+      fw.innerHTML = r.findings.map(function(f){
+        const s = SEV[f.severity] || SEV.LOW;
+        return '<div class="alert-feed-item">'
+             +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+             +   '<div class="flex-grow-1"><div class="a-txt">' + esc(f.message) + '</div>'
+             +     '<div class="a-time">' + s.t + '</div></div>'
+             + '</div>';
+      }).join("");
+    }
   }
 })();
 </script>
