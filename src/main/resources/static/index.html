@@ -1040,6 +1040,92 @@
   </div>
 
 
+  <div id="ws-jwt" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="card-suite p-3 p-lg-4">
+          <div class="mb-3">
+            <label class="form-label" for="jwtToken">JWT</label>
+            <textarea class="form-control font-mono" id="jwtToken" rows="6"
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...."></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="jwtSecret">Gizli Anahtar (isteğe bağlı)</label>
+            <input type="text" class="form-control font-mono" id="jwtSecret"
+                   placeholder="Yalnızca HS256/384/512 için imza doğrulanır">
+          </div>
+          <button type="button" class="btn btn-scan w-100" id="jwtBtn">
+            <i class="bi bi-ticket-detailed"></i> Analiz Et
+          </button>
+          <div id="jwtError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div id="jwtEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-ticket-detailed d-block mb-2"></i>
+            Analiz etmek istediğiniz JWT'yi soldan yapıştırın.
+          </div>
+        </div>
+
+        <div id="jwtResult" class="d-none">
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">Özet</h6>
+            <div class="row g-2">
+              <div class="col-6 col-md-3"><div class="stat-tile">
+                <div class="stat-value" id="jwtAlg" style="font-size:1.1rem;">—</div>
+                <div class="stat-label">Algoritma</div></div></div>
+              <div class="col-6 col-md-3"><div class="stat-tile">
+                <div class="stat-value" id="jwtExpired" style="font-size:1.1rem;">—</div>
+                <div class="stat-label">Süresi Dolmuş</div></div></div>
+              <div class="col-6 col-md-3"><div class="stat-tile">
+                <div class="stat-value" id="jwtSigChecked" style="font-size:1.1rem;">—</div>
+                <div class="stat-label">İmza Kontrolü</div></div></div>
+              <div class="col-6 col-md-3"><div class="stat-tile">
+                <div class="stat-value" id="jwtSigValid" style="font-size:1.1rem;">—</div>
+                <div class="stat-label">İmza Geçerli</div></div></div>
+            </div>
+            <div class="table-responsive mt-3">
+              <table class="table table-suite mb-0"><tbody id="jwtDates"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-2">Bulgular</h6>
+            <div id="jwtFindings"></div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <div class="card-suite p-3 p-lg-4 h-100">
+                <h6 class="font-display mb-2">Header</h6>
+                <pre class="scan-output font-mono" id="jwtHeaderJson" style="font-size:.76rem;white-space:pre-wrap;"></pre>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card-suite p-3 p-lg-4 h-100">
+                <h6 class="font-display mb-2">Payload</h6>
+                <pre class="scan-output font-mono" id="jwtPayloadJson" style="font-size:.76rem;white-space:pre-wrap;"></pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <h6 class="font-display mb-3">Tüm Claim'ler</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead><tr><th>Claim</th><th>Değer</th></tr></thead>
+                <tbody id="jwtClaims"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
   <!-- ==================== HASH VERIFIER & CRACKER ==================== -->
   <div id="ws-hash" class="d-none">
     <div class="row g-4">
@@ -3344,6 +3430,122 @@ function closeSidebar(){
         return '<tr><td class="text-muted">' + esc(t.directory) + '</td>'
              +   '<td>' + esc(t.tagName) + '</td>'
              +   '<td class="font-mono" style="font-size:.78rem;word-break:break-all;">' + esc(t.description) + '</td></tr>';
+      }).join("");
+    }
+  }
+})();
+</script>
+
+<script>
+/* ==========================================================
+   JWT Token Analyzer
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = { CRITICAL:{c:"#e5484d",t:"Kritik"}, HIGH:{c:"#e5484d",t:"Yüksek"},
+                MEDIUM:{c:"#f0a93b",t:"Orta"},     LOW:{c:"#2fd8c8",t:"Düşük"} };
+
+  function esc(v){
+    const t = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+            .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  const btn = document.getElementById("jwtBtn");
+  if (!btn) return;
+
+  btn.addEventListener("click", async function(){
+    const err = document.getElementById("jwtError");
+    err.textContent = "";
+
+    const token = document.getElementById("jwtToken").value.trim();
+    const secret = document.getElementById("jwtSecret").value.trim();
+    if (!token) {
+      err.textContent = "Önce bir JWT girin.";
+      return;
+    }
+
+    btn.disabled = true;
+    try {
+      const res = await secureFetch("/api/v1/jwt/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: token, secret: secret || null })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        throw new Error(body.message || ("İşlem başarısız (" + res.status + ")"));
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function render(r){
+    const err = document.getElementById("jwtError");
+    document.getElementById("jwtEmpty").classList.add("d-none");
+
+    if (!r.valid) {
+      document.getElementById("jwtResult").classList.add("d-none");
+      err.textContent = r.error || "Token çözülemedi.";
+      document.getElementById("jwtEmpty").classList.remove("d-none");
+      return;
+    }
+
+    document.getElementById("jwtResult").classList.remove("d-none");
+
+    document.getElementById("jwtAlg").textContent = r.algorithm || "—";
+    document.getElementById("jwtExpired").textContent = r.expired ? "Evet" : "Hayır";
+    document.getElementById("jwtExpired").style.color = r.expired ? "#e5484d" : "";
+
+    document.getElementById("jwtSigChecked").textContent = r.signatureChecked ? "Yapıldı" : "Yapılmadı";
+
+    const sigValidEl = document.getElementById("jwtSigValid");
+    if (r.signatureValid === null || r.signatureValid === undefined) {
+      sigValidEl.textContent = "—";
+      sigValidEl.style.color = "";
+    } else {
+      sigValidEl.textContent = r.signatureValid ? "Geçerli" : "Geçersiz";
+      sigValidEl.style.color = r.signatureValid ? "#2fd8c8" : "#e5484d";
+    }
+
+    const rows = [];
+    function satir(k, v){ rows.push('<tr><td class="text-muted" style="width:30%;">' + k + '</td><td>' + v + '</td></tr>'); }
+    satir("Tip (typ)", esc(r.type));
+    satir("Oluşturulma (iat)", r.issuedAt ? esc(r.issuedAt) : '<span class="text-muted">yok</span>');
+    satir("Bitiş (exp)", r.expiresAt ? esc(r.expiresAt) : '<span class="text-muted">yok — süresiz</span>');
+    satir("Geçerlilik başlangıcı (nbf)", r.notBefore ? esc(r.notBefore) : '<span class="text-muted">yok</span>');
+    document.getElementById("jwtDates").innerHTML = rows.join("");
+
+    document.getElementById("jwtHeaderJson").textContent = r.headerJson || "";
+    document.getElementById("jwtPayloadJson").textContent = r.payloadJson || "";
+
+    const fw = document.getElementById("jwtFindings");
+    if (!r.findings || r.findings.length === 0) {
+      fw.innerHTML = '<div style="color:#2fd8c8;font-size:.86rem;">'
+                   + '<i class="bi bi-check-circle"></i> Dikkat çeken bir şey yok.</div>';
+    } else {
+      fw.innerHTML = r.findings.map(function(f){
+        const s = SEV[f.severity] || SEV.LOW;
+        return '<div class="alert-feed-item">'
+             +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+             +   '<div class="flex-grow-1"><div class="a-txt">' + esc(f.message) + '</div>'
+             +     '<div class="a-time">' + s.t + '</div></div>'
+             + '</div>';
+      }).join("");
+    }
+
+    const claimsBody = document.getElementById("jwtClaims");
+    if (!r.claims || r.claims.length === 0) {
+      claimsBody.innerHTML = '<tr><td colspan="2" class="text-muted">Claim bulunamadı.</td></tr>';
+    } else {
+      claimsBody.innerHTML = r.claims.map(function(c){
+        return '<tr><td class="font-mono">' + esc(c.name) + '</td>'
+             +   '<td class="font-mono" style="font-size:.78rem;word-break:break-all;">' + esc(c.value) + '</td></tr>';
       }).join("");
     }
   }
