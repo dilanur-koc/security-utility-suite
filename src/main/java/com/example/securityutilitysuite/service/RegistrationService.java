@@ -50,8 +50,22 @@ public class RegistrationService {
      * @throws IllegalStateException   kayit kapaliysa
      * @throws IllegalArgumentException kullanici adi doluysa
      */
+
+    /**
+     * @param authentication istegi yapan kullanici; anonim istekte null olabilir
+     * @throws IllegalStateException   kayit kapaliysa
+     * @throws IllegalArgumentException kullanici adi doluysa
+     *
+     * synchronized: kurulumBekliyor() (count()==0 kontrolu) ile save() arasinda
+     * bir "check-then-act" araligi var. Bu metod senkronize edilmezse, ayni anda
+     * gelen iki ilk-kayit istegi ikisi de count()==0 gorup ikisi de ADMIN
+     * olusturabilir. synchronized, ayni JVM icinde istekleri siraya sokarak bunu
+     * engeller (uygulama tek instance calistigi surece yeterlidir; coklu
+     * instance/cluster senaryosunda bunun yerine DB seviyesinde bir kilit veya
+     * unique constraint gerekir).
+     */
     @Transactional
-    public User kaydet(RegisterRequest request, Authentication authentication) {
+    public synchronized User kaydet(RegisterRequest request, Authentication authentication) {
         boolean ilkKullanici = kurulumBekliyor();
 
         if (!ilkKullanici && !adminMi(authentication)) {
