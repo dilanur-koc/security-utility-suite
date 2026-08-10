@@ -970,6 +970,153 @@
 
 
 
+
+  <!-- ==================== HASH VERIFIER & CRACKER ==================== -->
+  <div id="ws-hash" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="card-suite p-3 p-lg-4">
+          <form id="hashForm">
+            <div class="mb-3">
+              <label class="form-label" for="hashOp">İşlem</label>
+              <select class="form-select" id="hashOp">
+                <option value="HASH">Özet hesapla</option>
+                <option value="VERIFY">Doğrula (metin ↔ hash)</option>
+                <option value="CRACK">Sözlükle kır</option>
+              </select>
+            </div>
+            <div class="mb-3" id="hashInputWrap">
+              <label class="form-label" for="hashInput">Metin</label>
+              <textarea class="form-control font-mono" id="hashInput" rows="3"
+                        placeholder="Özetlenecek metin..."></textarea>
+            </div>
+            <div class="mb-3 d-none" id="hashValueWrap">
+              <label class="form-label" for="hashValue">Hash Değeri</label>
+              <textarea class="form-control font-mono" id="hashValue" rows="3"
+                        placeholder="e10adc3949ba59abbe56e057f20f883e"></textarea>
+            </div>
+            <button type="submit" class="btn btn-scan w-100" id="hashBtn">
+              <i class="bi bi-hash"></i> Çalıştır
+            </button>
+            <div id="hashError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+          </form>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div id="hashEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-hash d-block mb-2"></i>
+            Bir işlem seçip soldan değer girin.
+          </div>
+        </div>
+
+        <div id="hashResult" class="d-none">
+          <div class="card-suite p-3 p-lg-4 mb-3 d-none" id="hashSummaryCard">
+            <h6 class="font-display mb-3">Sonuç</h6>
+            <div id="hashSummary"></div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3 d-none" id="hashDigestCard">
+            <h6 class="font-display mb-3">Özetler</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0"><tbody id="hashDigests"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <h6 class="font-display mb-3">Bulgular</h6>
+            <div id="hashFindings"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== AES-256 / SEZAR ==================== -->
+  <div id="ws-aes" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="card-suite p-3 p-lg-4">
+          <form id="cryForm">
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label" for="cryAlg">Algoritma</label>
+                <select class="form-select" id="cryAlg">
+                  <option value="AES_GCM">AES-256-GCM</option>
+                  <option value="CAESAR">Sezar (eğitim)</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label" for="cryOp">İşlem</label>
+                <select class="form-select" id="cryOp">
+                  <option value="ENCRYPT">Şifrele</option>
+                  <option value="DECRYPT">Çöz</option>
+                </select>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="cryInput">Girdi</label>
+              <textarea class="form-control font-mono" id="cryInput" rows="5"
+                        placeholder="Metin veya şifreli değer..." required></textarea>
+            </div>
+            <div class="mb-3" id="cryPassWrap">
+              <label class="form-label" for="cryPass">Parola</label>
+              <input type="password" class="form-control font-mono" id="cryPass"
+                     placeholder="En az 12 karakter">
+            </div>
+            <div class="mb-3 d-none" id="cryShiftWrap">
+              <label class="form-label" for="cryShift">Kaydırma</label>
+              <input type="number" class="form-control font-mono" id="cryShift"
+                     min="1" max="25" value="3">
+            </div>
+            <button type="submit" class="btn btn-scan w-100" id="cryBtn">
+              <i class="bi bi-file-lock2"></i> Çalıştır
+            </button>
+            <div id="cryError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+            <div id="cryProgress" class="d-none mt-3 text-center">
+              <div class="spinner-border" style="color:var(--cyan);width:1.6rem;height:1.6rem;" role="status"></div>
+              <div class="text-muted mt-2" style="font-size:.78rem;">Anahtar türetiliyor…</div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div id="cryEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-file-lock2 d-block mb-2"></i>
+            Şifrelemek veya çözmek istediğiniz metni soldan girin.
+          </div>
+        </div>
+
+        <div id="cryResult" class="d-none">
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="font-display mb-0">Çıktı</h6>
+              <button class="btn btn-sm btn-outline-suite" id="cryCopy">
+                <i class="bi bi-clipboard"></i> Kopyala
+              </button>
+            </div>
+            <div class="scan-output" id="cryOutput" style="min-height:90px;"></div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">Teknik Ayrıntılar</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0"><tbody id="cryDetails"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <h6 class="font-display mb-3">Bulgular</h6>
+            <div id="cryFindings"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== BASE64 / HEX CONVERTER ==================== -->
   <div id="ws-base64" class="d-none">
     <div class="row g-4">
@@ -2779,6 +2926,211 @@ function closeSidebar(){
              + '</div>';
       }).join("");
     }
+  }
+})();
+
+/* ==========================================================
+   Hash Verifier & Cracker  +  AES-256 / Sezar
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = { CRITICAL:{c:"#e5484d",t:"Kritik"}, HIGH:{c:"#e5484d",t:"Yüksek"},
+                MEDIUM:{c:"#f0a93b",t:"Orta"},     LOW:{c:"#2fd8c8",t:"Düşük"} };
+
+  function esc(v){
+    const t = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+            .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  function bulgular(hedefId, liste){
+    const el = document.getElementById(hedefId);
+    if (!liste || liste.length === 0) {
+      el.innerHTML = '<div style="color:#2fd8c8;font-size:.86rem;">'
+                   + '<i class="bi bi-check-circle"></i> Uyarı yok.</div>';
+      return;
+    }
+    el.innerHTML = liste.map(function(f){
+      const sv = SEV[f.severity] || SEV.LOW;
+      return '<div class="alert-feed-item">'
+           +   '<span class="feed-dot" style="background:' + sv.c + ';"></span>'
+           +   '<div class="flex-grow-1"><div class="a-txt">' + esc(f.message) + '</div>'
+           +     '<div class="a-time">' + sv.t + '</div></div>'
+           + '</div>';
+    }).join("");
+  }
+
+  /* ---------------- Hash ---------------- */
+  const hashForm = document.getElementById("hashForm");
+  if (hashForm) {
+    const opSec = document.getElementById("hashOp");
+
+    function alanlariGuncelle(){
+      const op = opSec.value;
+      // HASH: yalniz metin | VERIFY: ikisi | CRACK: yalniz hash
+      document.getElementById("hashInputWrap").classList.toggle("d-none", op === "CRACK");
+      document.getElementById("hashValueWrap").classList.toggle("d-none", op === "HASH");
+    }
+    opSec.addEventListener("change", alanlariGuncelle);
+    alanlariGuncelle();
+
+    hashForm.addEventListener("submit", async function(e){
+      e.preventDefault();
+      const err = document.getElementById("hashError");
+      const btn = document.getElementById("hashBtn");
+      err.textContent = "";
+      btn.disabled = true;
+
+      try {
+        const res = await secureFetch("/api/v1/hash", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            input: document.getElementById("hashInput").value || null,
+            hash: document.getElementById("hashValue").value || null,
+            operation: opSec.value
+          })
+        });
+        if (!res.ok) {
+          const b = await res.json().catch(function(){ return {}; });
+          throw new Error(b.fields ? Object.values(b.fields).join(" · ")
+                                   : (b.message || "İşlem başarısız (" + res.status + ")"));
+        }
+        hashRender(await res.json());
+      } catch (ex) {
+        err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  function hashRender(r){
+    document.getElementById("hashEmpty").classList.add("d-none");
+    document.getElementById("hashResult").classList.remove("d-none");
+
+    const ozetKart = document.getElementById("hashSummaryCard");
+    const ozet = document.getElementById("hashSummary");
+    const digestKart = document.getElementById("hashDigestCard");
+
+    // Ozet kutusu
+    if (r.operation === "VERIFY") {
+      ozetKart.classList.remove("d-none");
+      ozet.innerHTML = r.matched
+        ? '<div style="color:#2fd8c8;font-size:1rem;"><i class="bi bi-check-circle"></i> '
+          + 'Eşleşti — algoritma: <span class="font-mono">' + esc(r.matchedAlgorithm) + '</span></div>'
+        : '<div style="color:#e5484d;font-size:1rem;"><i class="bi bi-x-circle"></i> Eşleşme yok</div>';
+      if (r.identifiedTypes && r.identifiedTypes.length) {
+        ozet.innerHTML += '<div class="text-muted mt-2" style="font-size:.8rem;">Uzunluğa göre olası: '
+                        + r.identifiedTypes.map(esc).join(", ") + '</div>';
+      }
+    } else if (r.operation === "CRACK") {
+      ozetKart.classList.remove("d-none");
+      ozet.innerHTML = r.cracked
+        ? '<div style="color:#e5484d;font-size:1rem;"><i class="bi bi-unlock"></i> Kırıldı: '
+          + '<span class="font-mono">' + esc(r.cracked) + '</span></div>'
+          + '<div class="text-muted mt-2" style="font-size:.8rem;">Algoritma: '
+          + esc(r.matchedAlgorithm) + ' · ' + r.triedWords + ' kelime denendi</div>'
+        : '<div style="color:#2fd8c8;font-size:1rem;"><i class="bi bi-lock"></i> '
+          + 'Sözlükte bulunamadı</div>'
+          + '<div class="text-muted mt-2" style="font-size:.8rem;">'
+          + r.triedWords + ' kelime denendi</div>';
+    } else {
+      ozetKart.classList.add("d-none");
+    }
+
+    // Ozet tablosu
+    const anahtarlar = Object.keys(r.digests || {});
+    if (anahtarlar.length) {
+      digestKart.classList.remove("d-none");
+      document.getElementById("hashDigests").innerHTML = anahtarlar.map(function(k){
+        return '<tr><td class="text-muted" style="width:20%;">' + esc(k) + '</td>'
+             + '<td class="font-mono" style="font-size:.74rem;word-break:break-all;">'
+             + esc(r.digests[k]) + '</td></tr>';
+      }).join("");
+    } else {
+      digestKart.classList.add("d-none");
+    }
+
+    bulgular("hashFindings", r.findings);
+  }
+
+  /* ---------------- AES / Sezar ---------------- */
+  const cryForm = document.getElementById("cryForm");
+  if (cryForm) {
+    const algSec = document.getElementById("cryAlg");
+    let sonCikti = "";
+
+    function cryAlanlar(){
+      const sezar = algSec.value === "CAESAR";
+      document.getElementById("cryPassWrap").classList.toggle("d-none", sezar);
+      document.getElementById("cryShiftWrap").classList.toggle("d-none", !sezar);
+    }
+    algSec.addEventListener("change", cryAlanlar);
+    cryAlanlar();
+
+    const kopya = document.getElementById("cryCopy");
+    if (kopya) {
+      kopya.addEventListener("click", function(){
+        navigator.clipboard.writeText(sonCikti).then(function(){
+          kopya.innerHTML = '<i class="bi bi-check2"></i> Kopyalandı';
+          setTimeout(function(){ kopya.innerHTML = '<i class="bi bi-clipboard"></i> Kopyala'; }, 1500);
+        });
+      });
+    }
+
+    cryForm.addEventListener("submit", async function(e){
+      e.preventDefault();
+      const err = document.getElementById("cryError");
+      const btn = document.getElementById("cryBtn");
+      const prog = document.getElementById("cryProgress");
+      err.textContent = "";
+      btn.disabled = true;
+      // PBKDF2 210.000 iterasyon ~0.5 sn surer; kullanici beklediğini bilsin.
+      if (algSec.value === "AES_GCM") prog.classList.remove("d-none");
+
+      try {
+        const res = await secureFetch("/api/v1/crypto", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            input: document.getElementById("cryInput").value,
+            password: document.getElementById("cryPass").value || null,
+            shift: parseInt(document.getElementById("cryShift").value, 10) || 3,
+            algorithm: algSec.value,
+            operation: document.getElementById("cryOp").value
+          })
+        });
+        if (!res.ok) {
+          const b = await res.json().catch(function(){ return {}; });
+          throw new Error(b.fields ? Object.values(b.fields).join(" · ")
+                                   : (b.message || "İşlem başarısız (" + res.status + ")"));
+        }
+        const r = await res.json();
+        sonCikti = r.output;
+        cryRender(r);
+      } catch (ex) {
+        err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+      } finally {
+        btn.disabled = false;
+        prog.classList.add("d-none");
+      }
+    });
+  }
+
+  function cryRender(r){
+    document.getElementById("cryEmpty").classList.add("d-none");
+    document.getElementById("cryResult").classList.remove("d-none");
+    document.getElementById("cryOutput").textContent = r.output;
+
+    document.getElementById("cryDetails").innerHTML = (r.details || []).map(function(d){
+      return '<tr><td class="text-muted" style="width:34%;">' + esc(d.label) + '</td>'
+           + '<td class="font-mono" style="font-size:.76rem;word-break:break-all;">'
+           + esc(d.value) + '</td></tr>';
+    }).join("");
+
+    bulgular("cryFindings", r.findings);
   }
 })();
 </script>
