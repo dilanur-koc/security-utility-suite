@@ -971,6 +971,75 @@
 
 
 
+  <div id="ws-exif" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="card-suite p-3 p-lg-4">
+          <div class="mb-3">
+            <label class="form-label" for="exifFile">Görsel dosya</label>
+            <input type="file" class="form-control" id="exifFile" accept=".jpg,.jpeg,.png,.webp">
+            <div class="form-text">v1: JPEG, PNG, WEBP (max 25 MB). Format uzantıya değil dosya içeriğine bakılarak tespit edilir.</div>
+          </div>
+          <div class="d-grid gap-2">
+            <button type="button" class="btn btn-scan" id="exifReadBtn">
+              <i class="bi bi-search"></i> Metadata Oku
+            </button>
+            <button type="button" class="btn btn-outline-suite" id="exifCleanBtn">
+              <i class="bi bi-eraser"></i> Temizle &amp; İndir
+            </button>
+          </div>
+          <div id="exifError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div id="exifEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-image d-block mb-2"></i>
+            İncelemek veya temizlemek istediğiniz görseli soldan seçin.
+          </div>
+        </div>
+
+        <div id="exifResult" class="d-none">
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">Dosya Özeti</h6>
+            <div class="row g-2">
+              <div class="col-6 col-md-3"><div class="stat-tile">
+                <div class="stat-value" id="exifFormat" style="font-size:1.1rem;">—</div>
+                <div class="stat-label">Format</div></div></div>
+              <div class="col-6 col-md-3"><div class="stat-tile">
+                <div class="stat-value" id="exifSize" style="font-size:1.1rem;">—</div>
+                <div class="stat-label">Boyut</div></div></div>
+              <div class="col-6 col-md-3"><div class="stat-tile">
+                <div class="stat-value" id="exifTagCount" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Etiket</div></div></div>
+              <div class="col-6 col-md-3"><div class="stat-tile">
+                <div class="stat-value" id="exifGps" style="font-size:1.1rem;">—</div>
+                <div class="stat-label">GPS</div></div></div>
+            </div>
+            <div id="exifGpsDetail" class="mt-2 d-none" style="font-size:.82rem;color:#e5484d;"></div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-2">Bulgular</h6>
+            <div id="exifFindings"></div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-2">Tüm Etiketler</h6>
+            <div style="max-height:320px;overflow-y:auto;">
+              <table class="table table-sm mb-0">
+                <thead><tr><th>Grup</th><th>Etiket</th><th>Değer</th></tr></thead>
+                <tbody id="exifTags"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
   <!-- ==================== HASH VERIFIER & CRACKER ==================== -->
   <div id="ws-hash" class="d-none">
     <div class="row g-4">
@@ -3134,5 +3203,152 @@ function closeSidebar(){
   }
 })();
 </script>
+<script>
+/* ==========================================================
+   Metadata (EXIF) Cleaner
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const API_BASE = "/api/v1/metadata";
+  const SEV = { CRITICAL:{c:"#e5484d",t:"Kritik"}, HIGH:{c:"#e5484d",t:"Yüksek"},
+                MEDIUM:{c:"#f0a93b",t:"Orta"},     LOW:{c:"#2fd8c8",t:"Düşük"} };
+
+  function esc(v){
+    const t = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+            .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  function formatBytes(n){
+    if (n < 1024) return n + " B";
+    if (n < 1024*1024) return (n/1024).toFixed(1) + " KB";
+    return (n/(1024*1024)).toFixed(2) + " MB";
+  }
+
+  const fileInput = document.getElementById("exifFile");
+  const readBtn = document.getElementById("exifReadBtn");
+  const cleanBtn = document.getElementById("exifCleanBtn");
+  if (!fileInput || !readBtn || !cleanBtn) return;
+
+  const err = document.getElementById("exifError");
+
+  function selectedFileOrError(){
+    const f = fileInput.files && fileInput.files[0];
+    if (!f) {
+      err.textContent = "Önce bir dosya seçin.";
+      return null;
+    }
+    err.textContent = "";
+    return f;
+  }
+
+  readBtn.addEventListener("click", async function(){
+    const file = selectedFileOrError();
+    if (!file) return;
+
+    readBtn.disabled = true;
+    cleanBtn.disabled = true;
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await secureFetch(API_BASE + "/read", { method: "POST", body: fd });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        throw new Error(body.message || ("İşlem başarısız (" + res.status + ")"));
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      readBtn.disabled = false;
+      cleanBtn.disabled = false;
+    }
+  });
+
+  cleanBtn.addEventListener("click", async function(){
+    const file = selectedFileOrError();
+    if (!file) return;
+
+    readBtn.disabled = true;
+    cleanBtn.disabled = true;
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await secureFetch(API_BASE + "/clean", { method: "POST", body: fd });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        throw new Error(body.message || ("İşlem başarısız (" + res.status + ")"));
+      }
+
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = /filename="?([^"]+)"?/.exec(disposition);
+      const filename = match ? match[1] : ("cleaned_" + file.name);
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      readBtn.disabled = false;
+      cleanBtn.disabled = false;
+    }
+  });
+
+  function render(r){
+    document.getElementById("exifEmpty").classList.add("d-none");
+    document.getElementById("exifResult").classList.remove("d-none");
+
+    document.getElementById("exifFormat").textContent = r.detectedFormat;
+    document.getElementById("exifSize").textContent = formatBytes(r.sizeBytes);
+    document.getElementById("exifTagCount").textContent = r.tagCount;
+    document.getElementById("exifGps").textContent = r.hasGps ? "Var" : "Yok";
+
+    const gpsDetail = document.getElementById("exifGpsDetail");
+    if (r.hasGps) {
+      gpsDetail.classList.remove("d-none");
+      gpsDetail.innerHTML = '<i class="bi bi-geo-alt-fill"></i> Konum: '
+          + r.gpsLatitude.toFixed(6) + ", " + r.gpsLongitude.toFixed(6);
+    } else {
+      gpsDetail.classList.add("d-none");
+      gpsDetail.innerHTML = "";
+    }
+
+    const fw = document.getElementById("exifFindings");
+    if (!r.findings || r.findings.length === 0) {
+      fw.innerHTML = '<div style="color:#2fd8c8;font-size:.86rem;">'
+                   + '<i class="bi bi-check-circle"></i> Dikkat çeken bir şey yok.</div>';
+    } else {
+      fw.innerHTML = r.findings.map(function(f){
+        const s = SEV[f.severity] || SEV.LOW;
+        return '<div class="alert-feed-item">'
+             +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+             +   '<div class="flex-grow-1"><div class="a-txt">' + esc(f.message) + '</div>'
+             +     '<div class="a-time">' + s.t + '</div></div>'
+             + '</div>';
+      }).join("");
+    }
+
+    const tagsBody = document.getElementById("exifTags");
+    if (!r.tags || r.tags.length === 0) {
+      tagsBody.innerHTML = '<tr><td colspan="3" class="text-muted">Etiket bulunamadı.</td></tr>';
+    } else {
+      tagsBody.innerHTML = r.tags.map(function(t){
+        return '<tr><td class="text-muted">' + esc(t.directory) + '</td>'
+             +   '<td>' + esc(t.tagName) + '</td>'
+             +   '<td class="font-mono" style="font-size:.78rem;word-break:break-all;">' + esc(t.description) + '</td></tr>';
+      }).join("");
+    }
+  }
+})();
+</script>
+
 </body>
 </html>

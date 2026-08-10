@@ -25,6 +25,7 @@ dependencies {
 
     // VALIDATION (KIRMIZI HATALARI ÇÖZEN EKSİK BAĞIMLILIK):
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'com.drewnoakes:metadata-extractor:2.19.0'
 
     // VERİ TABANI VE JPA İÇİN EKLENENLER:
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
