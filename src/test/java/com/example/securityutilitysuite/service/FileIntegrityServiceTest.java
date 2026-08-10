@@ -134,8 +134,11 @@ class FileIntegrityServiceTest {
         @Test
         @DisplayName("Var olmayan dosya reddedilir")
         void olmayanDosya() {
+            // Servis, okunamayan dosya icin NoSuchElementException firlatiyor
+            // ("Dosya okunamadı veya bulunamadı"). Test bunu birebir yansitir.
             assertThatThrownBy(() -> service.createBaseline(tempDir.resolve("yok.txt").toString()))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(NoSuchElementException.class)
+                    .hasMessageContaining("bulunamadı");
         }
 
         @Test

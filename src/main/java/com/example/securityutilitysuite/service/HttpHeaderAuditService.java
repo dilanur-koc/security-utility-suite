@@ -2,6 +2,8 @@ package com.example.securityutilitysuite.service;
 
 import com.example.securityutilitysuite.dto.HeaderAuditRequest;
 import com.example.securityutilitysuite.dto.HeaderAuditResponse;
+import com.example.securityutilitysuite.dto.Finding;
+import com.example.securityutilitysuite.util.Errors;
 import com.example.securityutilitysuite.security.NetworkGuard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -103,7 +105,7 @@ public class HttpHeaderAuditService {
             return HeaderAuditResponse.unreachable(url, ex.getMessage());
         } catch (Exception ex) {
             log.warn("Baslik denetimi basarisiz url={}: {}", currentUrl, ex.getMessage());
-            return HeaderAuditResponse.unreachable(url, kisaHata(ex));
+            return HeaderAuditResponse.unreachable(url, Errors.kisa(ex));
         }
 
         long elapsed = System.currentTimeMillis() - start;
@@ -114,7 +116,7 @@ public class HttpHeaderAuditService {
 
         boolean https = response.uri().getScheme().equalsIgnoreCase("https");
         List<HeaderAuditResponse.HeaderCheck> checks = denetle(headers, https);
-        List<HeaderAuditResponse.Finding> findings = bulgular(headers, checks, https, response.statusCode());
+        List<Finding> findings = bulgular(headers, checks, https, response.statusCode());
 
         int score = puanla(checks);
         return new HeaderAuditResponse(
@@ -256,23 +258,23 @@ public class HttpHeaderAuditService {
     // Bulgular
     // ------------------------------------------------------------------
 
-    private List<HeaderAuditResponse.Finding> bulgular(
+    private List<Finding> bulgular(
             Map<String, String> h, List<HeaderAuditResponse.HeaderCheck> checks,
             boolean https, int statusCode) {
 
-        List<HeaderAuditResponse.Finding> f = new ArrayList<>();
+        List<Finding> f = new ArrayList<>();
 
         if (!https) {
-            f.add(new HeaderAuditResponse.Finding("HIGH",
+            f.add(new Finding("HIGH",
                     "Site HTTP üzerinden sunuluyor. Trafik şifresiz; araya girme saldırılarına açık."));
         }
 
         for (HeaderAuditResponse.HeaderCheck c : checks) {
             if ("MISSING".equals(c.status())) {
                 String sev = c.weight() >= 20 ? "HIGH" : (c.weight() >= 10 ? "MEDIUM" : "LOW");
-                f.add(new HeaderAuditResponse.Finding(sev, c.name() + " başlığı yok. " + c.description()));
+                f.add(new Finding(sev, c.name() + " başlığı yok. " + c.description()));
             } else if ("WARN".equals(c.status()) && c.note() != null) {
-                f.add(new HeaderAuditResponse.Finding("MEDIUM", c.name() + ": " + c.note()));
+                f.add(new Finding("MEDIUM", c.name() + ": " + c.note()));
             }
         }
 
@@ -280,7 +282,7 @@ public class HttpHeaderAuditService {
         for (String leaky : LEAKY_HEADERS) {
             String v = h.get(leaky);
             if (v != null && !v.isBlank()) {
-                f.add(new HeaderAuditResponse.Finding("LOW",
+                f.add(new Finding("LOW",
                         "'" + leaky + "' başlığı sunucu/teknoloji bilgisi sızdırıyor: " + v));
             }
         }
@@ -290,21 +292,21 @@ public class HttpHeaderAuditService {
         if (cookies != null) {
             String lower = cookies.toLowerCase();
             if (!lower.contains("httponly")) {
-                f.add(new HeaderAuditResponse.Finding("HIGH",
+                f.add(new Finding("HIGH",
                         "Çerezlerde HttpOnly yok; JavaScript ile okunabilirler."));
             }
             if (https && !lower.contains("secure")) {
-                f.add(new HeaderAuditResponse.Finding("HIGH",
+                f.add(new Finding("HIGH",
                         "Çerezlerde Secure yok; şifresiz bağlantıda da gönderilebilirler."));
             }
             if (!lower.contains("samesite")) {
-                f.add(new HeaderAuditResponse.Finding("MEDIUM",
+                f.add(new Finding("MEDIUM",
                         "Çerezlerde SameSite yok; CSRF riskini artırır."));
             }
         }
 
         if (statusCode >= 400) {
-            f.add(new HeaderAuditResponse.Finding("LOW",
+            f.add(new Finding("LOW",
                     "Sunucu " + statusCode + " döndürdü; başlıklar hata sayfasına ait olabilir."));
         }
 
@@ -398,9 +400,4 @@ public class HttpHeaderAuditService {
         return 0;
     }
 
-    private String kisaHata(Exception ex) {
-        String msg = ex.getMessage();
-        if (msg == null || msg.isBlank()) return ex.getClass().getSimpleName();
-        return msg.length() > 200 ? msg.substring(0, 200) + "…" : msg;
-    }
 }

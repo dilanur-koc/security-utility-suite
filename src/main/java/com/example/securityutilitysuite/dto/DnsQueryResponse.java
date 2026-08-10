@@ -31,11 +31,6 @@ public record DnsQueryResponse(
             boolean forwardConfirmed
     ) {}
 
-    public record Finding(
-            String severity,
-            String message
-    ) {}
-
     public static DnsQueryResponse failed(String domain, String error) {
         return new DnsQueryResponse(
                 domain,

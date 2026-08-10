@@ -57,13 +57,6 @@ public record SslCheckResponse(
         List<Finding> findings
 ) {
 
-    /**
-     * Tek bir bulgu. {@code severity} degerleri arayuzdeki rozetlerle ayni
-     * dili konussun diye {@code CRITICAL/HIGH/MEDIUM/LOW} olarak verilir.
-     */
-    public record Finding(String severity, String message) {
-    }
-
     /** Baglanti kurulamadiginda donen kisa yanit. */
     public static SslCheckResponse unreachable(String domain, int port, String error) {
         return new SslCheckResponse(

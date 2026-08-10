@@ -51,7 +51,4 @@ public record SubnetAnalyzeResponse(
     public record MacInfo(String address, String oui, String vendorHint,
                           boolean locallyAdministered, boolean multicast) {
     }
-
-    public record Finding(String severity, String message) {
-    }
 }

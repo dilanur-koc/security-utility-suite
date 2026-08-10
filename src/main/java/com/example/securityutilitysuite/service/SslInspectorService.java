@@ -2,6 +2,9 @@ package com.example.securityutilitysuite.service;
 
 import com.example.securityutilitysuite.dto.SslCheckRequest;
 import com.example.securityutilitysuite.dto.SslCheckResponse;
+import com.example.securityutilitysuite.dto.SslHistoryItem;
+import com.example.securityutilitysuite.dto.Finding;
+import com.example.securityutilitysuite.util.Errors;
 import com.example.securityutilitysuite.model.SslCheckResult;
 import com.example.securityutilitysuite.repository.SslCheckResultRepository;
 import com.example.securityutilitysuite.security.NetworkGuard;
@@ -31,6 +34,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -56,6 +60,7 @@ public class SslInspectorService {
     private static final int EXPIRY_WARN_DAYS = 30;
     private static final int RSA_MIN_BITS = 2048;
     private static final int EC_MIN_BITS = 256;
+    private static final int HISTORY_LIMIT = 100;
 
     private final SslCheckResultRepository repository;
     private final NetworkGuard networkGuard;
@@ -93,19 +98,41 @@ public class SslInspectorService {
                         strictFailure.getMessage());
             } catch (Exception ex) {
                 log.warn("TLS el sikismasi basarisiz host={} port={}: {}", host, port, ex.getMessage());
-                return SslCheckResponse.unreachable(host, port, kisaHata(ex));
+                return SslCheckResponse.unreachable(host, port, Errors.kisa(ex));
             }
         }
 
-        X509Certificate cert = (X509Certificate) hs.chain()[0];
+        // Zincir bos donebilir (anonim sifre takimlari) veya X509 olmayabilir;
+        // kontrolsuz erisim kullaniciya 500 olarak yansirdi.
+        if (hs.chain() == null || hs.chain().length == 0) {
+            return SslCheckResponse.unreachable(host, port, "Sunucu sertifika zinciri göndermedi");
+        }
+        if (!(hs.chain()[0] instanceof X509Certificate cert)) {
+            return SslCheckResponse.unreachable(host, port,
+                    "Sertifika X.509 biçiminde değil: " + hs.chain()[0].getType());
+        }
         return degerlendir(host, port, cert, hs);
     }
 
     @Transactional(readOnly = true)
-    public List<SslCheckResult> history(String domain) {
-        return (domain == null || domain.isBlank())
+    /**
+     * Gecmis kayitlar. JPA entity'lerini dogrudan REST'ten dondurmek yerine
+     * sade bir DTO'ya cevrilir: entity alanlari degistiginde API sozlesmesi
+     * sessizce kaymaz. Ayrica sonuc sayisi sinirlanir.
+     */
+    public List<SslHistoryItem> history(String domain) {
+        List<SslCheckResult> kayitlar = (domain == null || domain.isBlank())
                 ? repository.findAll()
                 : repository.findByDomain(domain);
+
+        return kayitlar.stream()
+                .sorted(Comparator.comparing(SslCheckResult::getCheckedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(HISTORY_LIMIT)
+                .map(k -> new SslHistoryItem(
+                        k.getDomain(), k.getIssuer(), k.getValidTo(),
+                        k.getDaysRemaining(), k.isExpired(), k.getCheckedAt()))
+                .toList();
     }
 
     // ------------------------------------------------------------------
@@ -199,7 +226,7 @@ public class SslInspectorService {
         String keyAlgorithm = cert.getPublicKey().getAlgorithm();
         int keyBits = anahtarUzunlugu(cert);
 
-        List<SslCheckResponse.Finding> findings = new ArrayList<>();
+        List<Finding> findings = new ArrayList<>();
 
         if (expired) {
             findings.add(f("CRITICAL", "Sertifikanın süresi dolmuş (" + Math.abs(daysRemaining) + " gün önce)."));
@@ -263,6 +290,8 @@ public class SslInspectorService {
             findings.add(f("HIGH", "Zayıf şifre takımı: " + cipher));
         }
 
+        zincirBulgulari(findings, hs.chain());
+
         kaydet(host, issuer, validFrom, validTo, daysRemaining, expired);
 
         return new SslCheckResponse(
@@ -281,6 +310,40 @@ public class SslInspectorService {
      * Onceki halinde her denetim bir satir ekliyordu; ayni domain birkac kez
      * kontrol edilince tablo gereksiz sisiyordu.
      */
+    /**
+     * Zincirdeki ARA sertifikalari denetler. Yalnizca yaprak sertifikaya
+     * bakmak, suresi dolmus bir ara sertifikayi gozden kacirir; tarayici ise
+     * zincirin tamamini dogruladigi icin siteyi yine de reddeder.
+     */
+    private void zincirBulgulari(List<Finding> f, Certificate[] chain) {
+        for (int i = 1; i < chain.length; i++) {
+            if (!(chain[i] instanceof X509Certificate ara)) continue;
+            try {
+                ara.checkValidity();
+            } catch (CertificateExpiredException e) {
+                f.add(Finding.high("Zincirdeki ara sertifikanın süresi dolmuş: "
+                        + kisaAd(ara.getSubjectX500Principal().getName())));
+            } catch (CertificateNotYetValidException e) {
+                f.add(Finding.high("Zincirdeki ara sertifika henüz geçerli değil: "
+                        + kisaAd(ara.getSubjectX500Principal().getName())));
+            }
+            String alg = ara.getSigAlgName();
+            if (alg != null && (alg.toUpperCase().contains("SHA1") || alg.toUpperCase().contains("MD5"))) {
+                f.add(Finding.high("Ara sertifikada zayıf imza algoritması: " + alg));
+            }
+        }
+    }
+
+    /** DN icinden yalnizca CN kismini cikarir; tam DN cok uzun ve okunmaz. */
+    private String kisaAd(String dn) {
+        if (dn == null) return "bilinmiyor";
+        for (String part : dn.split(",")) {
+            String p = part.trim();
+            if (p.regionMatches(true, 0, "CN=", 0, 3)) return p.substring(3);
+        }
+        return dn.length() > 60 ? dn.substring(0, 60) + "…" : dn;
+    }
+
     private void kaydet(String domain, String issuer, LocalDateTime from, LocalDateTime to,
                         long daysRemaining, boolean expired) {
         String kisaIssuer = (issuer != null && issuer.length() > 500)
@@ -318,8 +381,8 @@ public class SslInspectorService {
     // Yardimcilar
     // ------------------------------------------------------------------
 
-    private static SslCheckResponse.Finding f(String severity, String message) {
-        return new SslCheckResponse.Finding(severity, message);
+    private static Finding f(String severity, String message) {
+        return new Finding(severity, message);
     }
 
     private static LocalDateTime toLocal(Instant instant) {
@@ -385,23 +448,5 @@ public class SslInspectorService {
         return 0;
     }
 
-    /** DN icinden yalnizca CN kismini cikarir; tam DN cok uzun ve okunmaz. */
-    private String kisaAd(String dn) {
-        if (dn == null) return "bilinmiyor";
-        for (String part : dn.split(",")) {
-            String p = part.trim();
-            if (p.regionMatches(true, 0, "CN=", 0, 3)) {
-                return p.substring(3);
-            }
-        }
-        return dn.length() > 60 ? dn.substring(0, 60) + "…" : dn;
-    }
 
-    private String kisaHata(Exception ex) {
-        String msg = ex.getMessage();
-        if (msg == null || msg.isBlank()) {
-            return ex.getClass().getSimpleName();
-        }
-        return msg.length() > 200 ? msg.substring(0, 200) + "…" : msg;
-    }
 }

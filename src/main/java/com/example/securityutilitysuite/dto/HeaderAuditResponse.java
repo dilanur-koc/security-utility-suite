@@ -49,9 +49,6 @@ public record HeaderAuditResponse(
                               String status, int weight, String description, String note) {
     }
 
-    public record Finding(String severity, String message) {
-    }
-
     public static HeaderAuditResponse unreachable(String url, String error) {
         return new HeaderAuditResponse(
                 url, null, false, error, 0, null, 0, 0, "—",

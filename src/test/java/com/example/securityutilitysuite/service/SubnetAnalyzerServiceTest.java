@@ -1,6 +1,7 @@
 package com.example.securityutilitysuite.service;
 
 import com.example.securityutilitysuite.dto.SubnetAnalyzeRequest;
+import com.example.securityutilitysuite.dto.Finding;
 import com.example.securityutilitysuite.dto.SubnetAnalyzeResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -129,7 +130,7 @@ class SubnetAnalyzerServiceTest {
 
             assertThat(r.totalAddresses()).isEqualTo(4294967296L);
             assertThat(r.subnetMask()).isEqualTo("0.0.0.0");
-            assertThat(r.findings()).extracting(SubnetAnalyzeResponse.Finding::severity)
+            assertThat(r.findings()).extracting(Finding::severity)
                     .contains("HIGH");
         }
 
@@ -151,7 +152,7 @@ class SubnetAnalyzerServiceTest {
             SubnetAnalyzeResponse r = analyze("192.168.1.77/24");
 
             assertThat(r.networkAddress()).isEqualTo("192.168.1.0");
-            assertThat(r.findings()).extracting(SubnetAnalyzeResponse.Finding::message)
+            assertThat(r.findings()).extracting(Finding::message)
                     .anyMatch(msg -> msg.contains("ağ adresi değil"));
         }
     }
@@ -285,7 +286,7 @@ class SubnetAnalyzerServiceTest {
         @DisplayName("Yerel MAC için uyarı üretilir")
         void yerelMacBulgusu() {
             var r = service.analyze(new SubnetAnalyzeRequest("192.168.1.0/24", "02:00:00:11:22:33"));
-            assertThat(r.findings()).extracting(SubnetAnalyzeResponse.Finding::message)
+            assertThat(r.findings()).extracting(Finding::message)
                     .anyMatch(m -> m.contains("yerel olarak atanmış"));
         }
 

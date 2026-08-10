@@ -2,6 +2,7 @@ package com.example.securityutilitysuite.service;
 
 import com.example.securityutilitysuite.dto.SubnetAnalyzeRequest;
 import com.example.securityutilitysuite.dto.SubnetAnalyzeResponse;
+import com.example.securityutilitysuite.dto.Finding;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -64,7 +65,15 @@ public class SubnetAnalyzerService {
 
         int[] octets = new int[4];
         for (int i = 0; i < 4; i++) {
-            octets[i] = Integer.parseInt(m.group(i + 1));
+            String ham = m.group(i + 1);
+            // Sifirla baslayan oktetler belirsizdir: bazi araclar "010"u
+            // sekizlik (8), bazilari onluk (10) okur. Guvenlik araclarinda
+            // bu belirsizlik filtre atlatmak icin kullanilir.
+            if (ham.length() > 1 && ham.charAt(0) == '0') {
+                throw new IllegalArgumentException(
+                        "Sıfırla başlayan oktet belirsiz: '" + ham + "'. 010 yerine 10 yazın.");
+            }
+            octets[i] = Integer.parseInt(ham);
             if (octets[i] > 255) {
                 throw new IllegalArgumentException("Oktetler 0-255 aralığında olmalı: " + octets[i]);
             }
@@ -113,7 +122,7 @@ public class SubnetAnalyzerService {
             macInfo = analyzeMac(request.getMac().trim());
         }
 
-        List<SubnetAnalyzeResponse.Finding> findings =
+        List<Finding> findings =
                 bulgular(ip, network, prefix, usable, macInfo);
 
         return new SubnetAnalyzeResponse(
@@ -156,48 +165,48 @@ public class SubnetAnalyzerService {
     // Bulgular
     // ------------------------------------------------------------------
 
-    private List<SubnetAnalyzeResponse.Finding> bulgular(
+    private List<Finding> bulgular(
             long ip, long network, int prefix, long usable,
             SubnetAnalyzeResponse.MacInfo mac) {
 
-        List<SubnetAnalyzeResponse.Finding> f = new ArrayList<>();
+        List<Finding> f = new ArrayList<>();
 
         if (ip != network && prefix < 31) {
-            f.add(new SubnetAnalyzeResponse.Finding("LOW",
+            f.add(new Finding("LOW",
                     "Girilen adres ağ adresi değil; hesaplama " + toIp(network)
                     + " ağı üzerinden yapıldı."));
         }
         if (prefix <= 8 && prefix > 0) {
-            f.add(new SubnetAnalyzeResponse.Finding("MEDIUM",
+            f.add(new Finding("MEDIUM",
                     "Çok geniş bir blok (/" + prefix + ", " + usable + " host). "
                     + "Segmentasyon eksikliği yatay hareketi kolaylaştırır."));
         }
         if (prefix == 0) {
-            f.add(new SubnetAnalyzeResponse.Finding("HIGH",
+            f.add(new Finding("HIGH",
                     "/0 tüm IPv4 adres uzayını kapsar. Güvenlik kuralında kullanılıyorsa "
                     + "her yere izin veriyor demektir."));
         }
         if (prefix == 31) {
-            f.add(new SubnetAnalyzeResponse.Finding("LOW",
+            f.add(new Finding("LOW",
                     "/31 noktadan noktaya bağlantılar içindir (RFC 3021); yayın adresi yoktur."));
         }
         if (prefix == 32) {
-            f.add(new SubnetAnalyzeResponse.Finding("LOW",
+            f.add(new Finding("LOW",
                     "/32 tek bir adresi ifade eder."));
         }
 
         if (mac != null) {
             if (mac.locallyAdministered()) {
-                f.add(new SubnetAnalyzeResponse.Finding("MEDIUM",
+                f.add(new Finding("MEDIUM",
                         "MAC yerel olarak atanmış. Rastgeleleştirilmiş veya elle değiştirilmiş "
                         + "olabilir; MAC tabanlı erişim kontrolü güvenilir değildir."));
             }
             if (mac.multicast()) {
-                f.add(new SubnetAnalyzeResponse.Finding("LOW",
+                f.add(new Finding("LOW",
                         "MAC çoklu yayın (multicast) biti set; tekil bir cihaz adresi değil."));
             }
             if (mac.vendorHint() == null) {
-                f.add(new SubnetAnalyzeResponse.Finding("LOW",
+                f.add(new Finding("LOW",
                         "OUI öneki gömülü listede bulunamadı; üretici tespit edilemedi."));
             }
         }

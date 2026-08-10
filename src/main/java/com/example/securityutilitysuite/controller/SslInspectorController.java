@@ -2,7 +2,7 @@ package com.example.securityutilitysuite.controller;
 
 import com.example.securityutilitysuite.dto.SslCheckRequest;
 import com.example.securityutilitysuite.dto.SslCheckResponse;
-import com.example.securityutilitysuite.model.SslCheckResult;
+import com.example.securityutilitysuite.dto.SslHistoryItem;
 import com.example.securityutilitysuite.service.SslInspectorService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -39,7 +39,7 @@ public class SslInspectorController {
     }
 
     @GetMapping("/history")
-    public ResponseEntity<List<SslCheckResult>> history(
+    public ResponseEntity<List<SslHistoryItem>> history(
             @RequestParam(required = false) String domain
     ) {
         return ResponseEntity.ok(sslInspectorService.history(domain));

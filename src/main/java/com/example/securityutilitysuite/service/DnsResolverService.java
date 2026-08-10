@@ -2,6 +2,8 @@ package com.example.securityutilitysuite.service;
 
 import com.example.securityutilitysuite.dto.DnsQueryRequest;
 import com.example.securityutilitysuite.dto.DnsQueryResponse;
+import com.example.securityutilitysuite.dto.Finding;
+import com.example.securityutilitysuite.util.Errors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -47,7 +49,7 @@ public class DnsResolverService {
             records = lookup(domain, null);
         } catch (Exception ex) {
             log.warn("DNS cozumleme basarisiz domain={}: {}", domain, ex.getMessage());
-            return DnsQueryResponse.failed(domain, kisaHata(ex));
+            return DnsQueryResponse.failed(domain, Errors.kisa(ex));
         }
 
         if (records.values().stream().allMatch(list -> list == null || list.isEmpty())) {
@@ -55,16 +57,17 @@ public class DnsResolverService {
         }
 
         List<DnsQueryResponse.ResolverAnswer> resolvers = new ArrayList<>();
-        boolean consistent = true;
+        Karsilastirma karsilastirma = new Karsilastirma(true, 0);
 
         if (request.isSpoofCheck()) {
             resolvers = cozumleyicileriKarsilastirParalel(domain);
-            consistent = tutarliMi(resolvers);
+            karsilastirma = tutarliMi(resolvers);
         }
 
         List<String> aRecords = safeGetList(records, "A");
         List<DnsQueryResponse.ReverseLookup> reverse = tersDns(aRecords);
-        List<DnsQueryResponse.Finding> findings = bulgulariCikar(domain, records, resolvers, consistent, reverse);
+        boolean consistent = karsilastirma.tutarli();
+        List<Finding> findings = bulgulariCikar(domain, records, resolvers, karsilastirma, reverse);
 
         return new DnsQueryResponse(domain, true, null, records, resolvers, consistent, reverse, findings);
     }
@@ -184,22 +187,38 @@ public class DnsResolverService {
             List<String> a = lookupSingle(domain, ip, "A");
             return new DnsQueryResponse.ResolverAnswer(name, ip, a, System.currentTimeMillis() - start, null);
         } catch (Exception ex) {
-            return new DnsQueryResponse.ResolverAnswer(name, ip, List.of(), System.currentTimeMillis() - start, kisaHata(ex));
+            return new DnsQueryResponse.ResolverAnswer(name, ip, List.of(), System.currentTimeMillis() - start, Errors.kisa(ex));
         }
     }
 
-    private boolean tutarliMi(List<DnsQueryResponse.ResolverAnswer> answers) {
+    /**
+     * Karsilastirma sonucu. Onceki halinde yalnizca bir boolean donuyordu ve
+     * HICBIR cozumleyici yanit vermediginde de "tutarli" deniyordu — arayuz
+     * yesil rozet gosteriyor, oysa karsilastirilan hicbir sey yok. Bir
+     * guvenlik aracinda "veri yok" ile "sorun yok" ayni gorunmemeli.
+     */
+    private record Karsilastirma(boolean tutarli, int karsilastirilabilir) {
+        boolean anlamli() {
+            return karsilastirilabilir >= 2;
+        }
+    }
+
+    private Karsilastirma tutarliMi(List<DnsQueryResponse.ResolverAnswer> answers) {
         Set<String> reference = null;
+        int veriDonduren = 0;
+        boolean tutarli = true;
+
         for (DnsQueryResponse.ResolverAnswer a : answers) {
             if (a == null || a.error() != null || a.aRecords() == null || a.aRecords().isEmpty()) continue;
+            veriDonduren++;
             Set<String> current = new LinkedHashSet<>(a.aRecords());
             if (reference == null) {
                 reference = current;
             } else if (!reference.equals(current)) {
-                return false;
+                tutarli = false;
             }
         }
-        return true;
+        return new Karsilastirma(tutarli, veriDonduren);
     }
 
     // ------------------------------------------------------------------
@@ -263,18 +282,26 @@ public class DnsResolverService {
     // Bulgular
     // ------------------------------------------------------------------
 
-    private List<DnsQueryResponse.Finding> bulgulariCikar(
+    private List<Finding> bulgulariCikar(
             String domain,
             Map<String, List<String>> records,
             List<DnsQueryResponse.ResolverAnswer> resolvers,
-            boolean consistent,
+            Karsilastirma karsilastirma,
             List<DnsQueryResponse.ReverseLookup> reverse) {
 
-        List<DnsQueryResponse.Finding> f = new ArrayList<>();
+        List<Finding> f = new ArrayList<>();
 
         // Spoofing kontrolü
-        if (resolvers != null && !resolvers.isEmpty() && !consistent) {
-            f.add(new DnsQueryResponse.Finding("HIGH",
+        if (resolvers != null && !resolvers.isEmpty() && !karsilastirma.anlamli()) {
+            f.add(Finding.medium(
+                    "Spoofing karşılaştırması yapılamadı: genel çözümleyicilerin "
+                    + karsilastirma.karsilastirilabilir() + " tanesi yanıt verdi "
+                    + "(en az 2 gerekiyor). Ağ, 53 numaralı porta giden dış "
+                    + "sorguları engelliyor olabilir."));
+        }
+
+        if (resolvers != null && karsilastirma.anlamli() && !karsilastirma.tutarli()) {
+            f.add(new Finding("HIGH",
                     "Farklı çözümleyiciler farklı A kayıtları döndürdü. Bu bir DNS spoofing belirtisi olabilir; "
                             + "ancak CDN ve coğrafi yönlendirme de aynı sonucu verir, doğrulanmalı."));
         }
@@ -286,7 +313,7 @@ public class DnsResolverService {
             for (DnsQueryResponse.ResolverAnswer a : resolvers) {
                 if (a != null && a.error() == null && a.aRecords() != null && !a.aRecords().isEmpty()
                         && !localSet.isEmpty() && !localSet.equals(new LinkedHashSet<>(a.aRecords()))) {
-                    f.add(new DnsQueryResponse.Finding("MEDIUM",
+                    f.add(new Finding("MEDIUM",
                             "Yerel çözümleyicinin yanıtı " + a.name() + " ile eşleşmiyor. "
                                     + "Yerel DNS önbelleği zehirlenmiş veya kurumsal bir yönlendirme olabilir."));
                     break;
@@ -297,7 +324,7 @@ public class DnsResolverService {
         // Özel IP (Private / Loopback) Kontrolü
         for (String ip : localA) {
             if (ozelAdresMi(ip)) {
-                f.add(new DnsQueryResponse.Finding("MEDIUM",
+                f.add(new Finding("MEDIUM",
                         "A kaydı özel/yerel bir adrese işaret ediyor: " + ip
                                 + " — DNS rebinding veya yanlış yapılandırma göstergesi olabilir."));
                 break;
@@ -310,14 +337,14 @@ public class DnsResolverService {
         boolean hasSpf = txtRecords.stream().anyMatch(t -> t != null && t.toLowerCase().startsWith("v=spf1"));
 
         if (!hasSpf) {
-            f.add(new DnsQueryResponse.Finding(hasMx ? "HIGH" : "MEDIUM",
+            f.add(new Finding(hasMx ? "HIGH" : "MEDIUM",
                     "SPF kaydı bulunamadı. Alan adı adına sahte e-posta gönderimi riski var."));
         }
 
         // Ad Sunucusu (NS) Kontrolü
         int nsCount = safeGetList(records, "NS").size();
         if (nsCount == 1) {
-            f.add(new DnsQueryResponse.Finding("MEDIUM",
+            f.add(new Finding("MEDIUM",
                     "Tek ad sunucusu (NS) tanımlı. Tek nokta arızası (SPOF) riski var."));
         }
 
@@ -325,7 +352,7 @@ public class DnsResolverService {
         if (reverse != null && !reverse.isEmpty()) {
             long unconfirmed = reverse.stream().filter(r -> r != null && !r.forwardConfirmed()).count();
             if (unconfirmed == reverse.size()) {
-                f.add(new DnsQueryResponse.Finding("LOW",
+                f.add(new Finding("LOW",
                         "Hiçbir A kaydı ileri doğrulamalı ters DNS ile eşleşmedi."));
             }
         }
@@ -362,10 +389,4 @@ public class DnsResolverService {
         }
     }
 
-    private String kisaHata(Exception ex) {
-        if (ex == null) return "Unknown Error";
-        String msg = ex.getMessage();
-        if (msg == null || msg.isBlank()) return ex.getClass().getSimpleName();
-        return msg.length() > 200 ? msg.substring(0, 200) + "…" : msg;
-    }
 }
