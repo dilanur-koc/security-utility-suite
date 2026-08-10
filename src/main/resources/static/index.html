@@ -1126,6 +1126,84 @@
   </div>
 
 
+  <div id="ws-sshblock" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="card-suite p-3 p-lg-4">
+          <div class="mb-3">
+            <label class="form-label" for="sshLogInput">SSH Auth Log</label>
+            <textarea class="form-control font-mono" id="sshLogInput" rows="10"
+                      placeholder="Aug 10 10:15:20 server sshd[100]: Failed password for root from 203.0.113.5 port 51001 ssh2"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="sshThreshold">Engelleme Eşiği (başarısız deneme)</label>
+            <input type="number" class="form-control font-mono" id="sshThreshold" min="1" value="5">
+          </div>
+          <button type="button" class="btn btn-scan w-100" id="sshBtn">
+            <i class="bi bi-slash-circle"></i> Analiz Et
+          </button>
+          <div id="sshError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div id="sshEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-slash-circle d-block mb-2"></i>
+            Analiz etmek istediğiniz SSH auth log içeriğini soldan yapıştırın.
+          </div>
+        </div>
+
+        <div id="sshResult" class="d-none">
+          <div class="row g-3 mb-3">
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="sshTotalLines" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Toplam Satır</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="sshMatchedLines" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Tanınan Satır</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="sshFlaggedIps" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Engellenmesi Önerilen IP</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-2">Bulgular</h6>
+            <div id="sshFindings"></div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <h6 class="font-display mb-3">IP Bazında Özet</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead>
+                  <tr>
+                    <th>IP</th><th>Başarısız</th><th>Sonra Başarılı?</th>
+                    <th>Denenen Kullanıcılar</th><th>İlk / Son Görülme</th><th>Öneri</th>
+                  </tr>
+                </thead>
+                <tbody id="sshIpTable"></tbody>
+              </table>
+            </div>
+            <div id="sshIpEmpty" class="empty-state compact d-none">
+              <i class="bi bi-inbox d-block mb-1"></i>Tanınan IP bulunamadı.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
   <!-- ==================== HASH VERIFIER & CRACKER ==================== -->
   <div id="ws-hash" class="d-none">
     <div class="row g-4">
@@ -3546,6 +3624,111 @@ function closeSidebar(){
       claimsBody.innerHTML = r.claims.map(function(c){
         return '<tr><td class="font-mono">' + esc(c.name) + '</td>'
              +   '<td class="font-mono" style="font-size:.78rem;word-break:break-all;">' + esc(c.value) + '</td></tr>';
+      }).join("");
+    }
+  }
+})();
+</script>
+
+<script>
+/* ==========================================================
+   SSH Brute-Force Blocker
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = { CRITICAL:{c:"#e5484d",t:"Kritik"}, HIGH:{c:"#e5484d",t:"Yüksek"},
+                MEDIUM:{c:"#f0a93b",t:"Orta"},     LOW:{c:"#2fd8c8",t:"Düşük"} };
+
+  function esc(v){
+    const t = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+            .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  const btn = document.getElementById("sshBtn");
+  if (!btn) return;
+
+  btn.addEventListener("click", async function(){
+    const err = document.getElementById("sshError");
+    err.textContent = "";
+
+    const logContent = document.getElementById("sshLogInput").value;
+    const thresholdRaw = document.getElementById("sshThreshold").value;
+    const threshold = thresholdRaw ? parseInt(thresholdRaw, 10) : null;
+
+    if (!logContent || !logContent.trim()) {
+      err.textContent = "Önce analiz edilecek log içeriğini girin.";
+      return;
+    }
+
+    btn.disabled = true;
+    try {
+      const res = await secureFetch("/api/v1/ssh/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logContent: logContent, threshold: threshold })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        throw new Error(body.message || ("İşlem başarısız (" + res.status + ")"));
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function render(r){
+    document.getElementById("sshEmpty").classList.add("d-none");
+    document.getElementById("sshResult").classList.remove("d-none");
+
+    document.getElementById("sshTotalLines").textContent = r.totalLines;
+    document.getElementById("sshMatchedLines").textContent = r.matchedLines;
+    const flaggedCount = (r.ipSummaries || []).filter(function(s){ return s.recommendBlock; }).length;
+    document.getElementById("sshFlaggedIps").textContent = flaggedCount;
+
+    const fw = document.getElementById("sshFindings");
+    if (!r.findings || r.findings.length === 0) {
+      fw.innerHTML = '<div style="color:#2fd8c8;font-size:.86rem;">'
+                   + '<i class="bi bi-check-circle"></i> Dikkat çeken bir şey yok.</div>';
+    } else {
+      fw.innerHTML = r.findings.map(function(f){
+        const s = SEV[f.severity] || SEV.LOW;
+        return '<div class="alert-feed-item">'
+             +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+             +   '<div class="flex-grow-1"><div class="a-txt">' + esc(f.message) + '</div>'
+             +     '<div class="a-time">' + s.t + '</div></div>'
+             + '</div>';
+      }).join("");
+    }
+
+    const tbody = document.getElementById("sshIpTable");
+    const ipEmpty = document.getElementById("sshIpEmpty");
+    if (!r.ipSummaries || r.ipSummaries.length === 0) {
+      tbody.innerHTML = "";
+      ipEmpty.classList.remove("d-none");
+    } else {
+      ipEmpty.classList.add("d-none");
+      tbody.innerHTML = r.ipSummaries.map(function(s){
+        const rec = s.recommendBlock
+          ? '<code style="font-size:.72rem;">' + esc(s.suggestedRule) + '</code>'
+          : '<span class="text-muted">—</span>';
+        const after = s.succeededAfterFailures
+          ? '<span style="color:#e5484d;">Evet</span>'
+          : '<span class="text-muted">Hayır</span>';
+        const users = (s.usernamesTried || []).map(esc).join(", ") || "—";
+        const seen = esc(s.firstSeen) + ' — ' + esc(s.lastSeen);
+        return '<tr>'
+             +   '<td class="font-mono">' + esc(s.ip) + '</td>'
+             +   '<td class="font-mono">' + s.failedAttempts + '</td>'
+             +   '<td>' + after + '</td>'
+             +   '<td style="font-size:.78rem;max-width:220px;">' + users + '</td>'
+             +   '<td class="text-muted" style="font-size:.74rem;">' + seen + '</td>'
+             +   '<td>' + rec + '</td>'
+             + '</tr>';
       }).join("");
     }
   }
