@@ -1204,6 +1204,131 @@
   </div>
 
 
+  <div id="ws-gitleak" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="card-suite p-3 p-lg-4">
+          <div class="mb-3">
+            <label class="form-label" for="gitleakInput">Kod / .env / Git Diff İçeriği</label>
+            <textarea class="form-control font-mono" id="gitleakInput" rows="12"
+                      placeholder="AWS_SECRET_KEY=... veya bir git diff yapıştırın"></textarea>
+          </div>
+          <button type="button" class="btn btn-scan w-100" id="gitleakBtn">
+            <i class="bi bi-key"></i> Tara
+          </button>
+          <div id="gitleakError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div id="gitleakEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-key d-block mb-2"></i>
+            Taramak istediğiniz metni soldan yapıştırın.
+          </div>
+        </div>
+
+        <div id="gitleakResult" class="d-none">
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <div class="stat-tile">
+                <div class="stat-value" id="gitleakTotalLines" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Toplam Satır</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="stat-tile">
+                <div class="stat-value" id="gitleakLeakCount" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Bulunan Sızıntı</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-2">Bulgular</h6>
+            <div id="gitleakFindings"></div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <h6 class="font-display mb-3">Sızıntı Ayrıntıları</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead><tr><th>Tür</th><th>Önem</th><th>Satır</th><th>Değer (maskelenmiş)</th></tr></thead>
+                <tbody id="gitleakTable"></tbody>
+              </table>
+            </div>
+            <div id="gitleakTableEmpty" class="empty-state compact d-none">
+              <i class="bi bi-shield-check d-block mb-1"></i>Sızıntı bulunamadı.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ws-ioc" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="card-suite p-3 p-lg-4">
+          <div class="mb-3">
+            <label class="form-label" for="iocInput">Tehdit Raporu / Log Metni</label>
+            <textarea class="form-control font-mono" id="iocInput" rows="12"
+                      placeholder="Şüpheli sunucu: 203[.]0[.]113[.]5 — hxxp://kotu-site[.]com/yol"></textarea>
+          </div>
+          <button type="button" class="btn btn-scan w-100" id="iocBtn">
+            <i class="bi bi-radar"></i> Göstergeleri Çıkar
+          </button>
+          <div id="iocError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div id="iocEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-radar d-block mb-2"></i>
+            Analiz etmek istediğiniz metni soldan yapıştırın.
+          </div>
+        </div>
+
+        <div id="iocResult" class="d-none">
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <div class="stat-tile">
+                <div class="stat-value" id="iocItemCount" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Bulunan Gösterge</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="stat-tile">
+                <div class="stat-value" id="iocDefangedCount" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Normalize Edilen</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-2">Bulgular</h6>
+            <div id="iocFindings"></div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <h6 class="font-display mb-3">Göstergeler</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead><tr><th>Tür</th><th>Değer</th><th>Not</th></tr></thead>
+                <tbody id="iocTable"></tbody>
+              </table>
+            </div>
+            <div id="iocTableEmpty" class="empty-state compact d-none">
+              <i class="bi bi-inbox d-block mb-1"></i>Gösterge bulunamadı.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
   <!-- ==================== HASH VERIFIER & CRACKER ==================== -->
   <div id="ws-hash" class="d-none">
     <div class="row g-4">
@@ -3728,6 +3853,176 @@ function closeSidebar(){
              +   '<td style="font-size:.78rem;max-width:220px;">' + users + '</td>'
              +   '<td class="text-muted" style="font-size:.74rem;">' + seen + '</td>'
              +   '<td>' + rec + '</td>'
+             + '</tr>';
+      }).join("");
+    }
+  }
+})();
+</script>
+
+<script>
+/* ==========================================================
+   Git & Secret Leak Finder
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = { CRITICAL:{c:"#e5484d",t:"Kritik"}, HIGH:{c:"#e5484d",t:"Yüksek"},
+                MEDIUM:{c:"#f0a93b",t:"Orta"},     LOW:{c:"#2fd8c8",t:"Düşük"} };
+
+  function esc(v){
+    const t = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+            .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  const btn = document.getElementById("gitleakBtn");
+  if (!btn) return;
+
+  btn.addEventListener("click", async function(){
+    const err = document.getElementById("gitleakError");
+    err.textContent = "";
+
+    const content = document.getElementById("gitleakInput").value;
+    if (!content || !content.trim()) {
+      err.textContent = "Önce taranacak metni girin.";
+      return;
+    }
+
+    btn.disabled = true;
+    try {
+      const res = await secureFetch("/api/v1/secrets/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: content })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        throw new Error(body.message || ("İşlem başarısız (" + res.status + ")"));
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function render(r){
+    document.getElementById("gitleakEmpty").classList.add("d-none");
+    document.getElementById("gitleakResult").classList.remove("d-none");
+
+    document.getElementById("gitleakTotalLines").textContent = r.totalLines;
+    document.getElementById("gitleakLeakCount").textContent = r.leakCount;
+
+    const fw = document.getElementById("gitleakFindings");
+    fw.innerHTML = (r.findings || []).map(function(f){
+      const s = SEV[f.severity] || SEV.LOW;
+      return '<div class="alert-feed-item">'
+           +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+           +   '<div class="flex-grow-1"><div class="a-txt">' + esc(f.message) + '</div>'
+           +     '<div class="a-time">' + s.t + '</div></div>'
+           + '</div>';
+    }).join("");
+
+    const tbody = document.getElementById("gitleakTable");
+    const tEmpty = document.getElementById("gitleakTableEmpty");
+    if (!r.leaks || r.leaks.length === 0) {
+      tbody.innerHTML = "";
+      tEmpty.classList.remove("d-none");
+    } else {
+      tEmpty.classList.add("d-none");
+      tbody.innerHTML = r.leaks.map(function(l){
+        const s = SEV[l.severity] || SEV.LOW;
+        return '<tr>'
+             +   '<td>' + esc(l.type) + '</td>'
+             +   '<td><span class="badge-status" style="background:' + s.c + '22;color:' + s.c + ';">' + s.t + '</span></td>'
+             +   '<td class="font-mono">' + (l.line > 0 ? l.line : '—') + '</td>'
+             +   '<td class="font-mono" style="font-size:.78rem;">' + esc(l.maskedValue) + '</td>'
+             + '</tr>';
+      }).join("");
+    }
+  }
+})();
+</script>
+
+<script>
+/* ==========================================================
+   Threat Intel (IOC) Extractor
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = { CRITICAL:{c:"#e5484d",t:"Kritik"}, HIGH:{c:"#e5484d",t:"Yüksek"},
+                MEDIUM:{c:"#f0a93b",t:"Orta"},     LOW:{c:"#2fd8c8",t:"Düşük"} };
+
+  function esc(v){
+    const t = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+            .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  const btn = document.getElementById("iocBtn");
+  if (!btn) return;
+
+  btn.addEventListener("click", async function(){
+    const err = document.getElementById("iocError");
+    err.textContent = "";
+
+    const content = document.getElementById("iocInput").value;
+    if (!content || !content.trim()) {
+      err.textContent = "Önce analiz edilecek metni girin.";
+      return;
+    }
+
+    btn.disabled = true;
+    try {
+      const res = await secureFetch("/api/v1/ioc/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: content })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        throw new Error(body.message || ("İşlem başarısız (" + res.status + ")"));
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function render(r){
+    document.getElementById("iocEmpty").classList.add("d-none");
+    document.getElementById("iocResult").classList.remove("d-none");
+
+    document.getElementById("iocItemCount").textContent = (r.items || []).length;
+    document.getElementById("iocDefangedCount").textContent = r.defangedCount;
+
+    const fw = document.getElementById("iocFindings");
+    fw.innerHTML = (r.findings || []).map(function(f){
+      const s = SEV[f.severity] || SEV.LOW;
+      return '<div class="alert-feed-item">'
+           +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+           +   '<div class="flex-grow-1"><div class="a-txt">' + esc(f.message) + '</div>'
+           +     '<div class="a-time">' + s.t + '</div></div>'
+           + '</div>';
+    }).join("");
+
+    const tbody = document.getElementById("iocTable");
+    const tEmpty = document.getElementById("iocTableEmpty");
+    if (!r.items || r.items.length === 0) {
+      tbody.innerHTML = "";
+      tEmpty.classList.remove("d-none");
+    } else {
+      tEmpty.classList.add("d-none");
+      tbody.innerHTML = r.items.map(function(i){
+        return '<tr>'
+             +   '<td><span class="port-chip">' + esc(i.type) + '</span></td>'
+             +   '<td class="font-mono" style="font-size:.78rem;word-break:break-all;">' + esc(i.value) + '</td>'
+             +   '<td class="text-muted" style="font-size:.78rem;">' + esc(i.note) + '</td>'
              + '</tr>';
       }).join("");
     }
