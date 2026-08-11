@@ -25,3 +25,4 @@ data/
 cookies.txt
 *.cookies
 login.sh
+apply_*.py
