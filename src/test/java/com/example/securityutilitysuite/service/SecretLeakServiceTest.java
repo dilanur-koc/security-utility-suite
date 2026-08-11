@@ -69,4 +69,44 @@ class SecretLeakServiceTest {
         assertThat(r.leakCount()).isZero();
         assertThat(r.findings()).anyMatch(f -> f.severity().equals("LOW"));
     }
+
+    @Test
+    void onIkiKarakterAltiTamamenMaskelenir() {
+        // 11 karakter — esik 12'nin ALTINDA, tamamen yildizlanmali
+        String content = "token=\"abcdefghijk\""; // 11 karakter
+        SecretScanResponse r = service.scan(new SecretScanRequest(content));
+
+        assertThat(r.leaks()).hasSize(1);
+        assertThat(r.leaks().get(0).maskedValue()).isEqualTo("*".repeat(11));
+    }
+
+    @Test
+    void onIkiKarakterVeUzeriKismenMaskelenir() {
+        // 13 karakter — esigin USTUNDE, kismi maskeleme (ilk4…son4)
+        String content = "token=\"abcdefghijklm\""; // 13 karakter
+        SecretScanResponse r = service.scan(new SecretScanRequest(content));
+
+        assertThat(r.leaks()).hasSize(1);
+        String masked = r.leaks().get(0).maskedValue();
+        assertThat(masked).startsWith("abcd").endsWith("jklm").contains("…");
+        assertThat(masked).doesNotContain("abcdefghijklm");
+    }
+
+    @Test
+    void jenerikKalipBulgusuDogrulamaNotuIcerir() {
+        String content = "password: \"degistirin123\"";
+        SecretScanResponse r = service.scan(new SecretScanRequest(content));
+
+        assertThat(r.findings()).anyMatch(f ->
+                f.message().contains("Genel Anahtar/Parola") && f.message().contains("elle doğrulanmalı"));
+    }
+
+    @Test
+    void kesinKaliplarJenerikNotAlmaz() {
+        String content = "AKIAABCDEFGHIJKLMNOP";
+        SecretScanResponse r = service.scan(new SecretScanRequest(content));
+
+        assertThat(r.findings()).anyMatch(f -> f.message().contains("AWS Access Key"));
+        assertThat(r.findings()).noneMatch(f -> f.message().contains("AWS Access Key") && f.message().contains("elle doğrulanmalı"));
+    }
 }

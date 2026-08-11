@@ -34,6 +34,8 @@ import java.util.regex.Pattern;
 @Service
 public class SecretLeakService {
 
+    private static final String GENERIC_ASSIGNMENT_TYPE = "Genel Anahtar/Parola Ataması";
+
     private record SecretPattern(String type, Pattern pattern, String severity, int valueGroup) {
     }
 
@@ -74,7 +76,7 @@ public class SecretLeakService {
             new SecretPattern("Olası JWT",
                     Pattern.compile("\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b"),
                     "MEDIUM", 0),
-            new SecretPattern("Genel Anahtar/Parola Ataması",
+            new SecretPattern(GENERIC_ASSIGNMENT_TYPE,
                     Pattern.compile("(?i)\\b(api[_-]?key|secret|token|password|passwd|pwd)\\s*[:=]\\s*['\"]([A-Za-z0-9\\-_/+=]{8,})['\"]"),
                     "MEDIUM", 2)
     );
@@ -144,6 +146,15 @@ public class SecretLeakService {
                     ? type + " tespit edildi" + satirBilgisi + "."
                     : count + " adet " + type + " tespit edildi" + satirBilgisi + ".";
 
+            // Jenerik "anahtar=deger" kalibi kesin bir format degil (AWS AKIA,
+            // GitHub ghp_ gibi diger kaliplarin aksine) — sablon/placeholder
+            // degerleri de (orn. password: "degistirin") yakalayabilir. Bu
+            // notu yalnizca bu kaliptan gelen bulgulara ekliyoruz; kesin
+            // kaliplarin guvenilirligini dusurmemek icin diger turler etkilenmez.
+            if (type.equals(GENERIC_ASSIGNMENT_TYPE)) {
+                msg += " Jenerik bir kalıptır — gerçek bir sızıntı olduğu elle doğrulanmalı, şablon/placeholder değer olabilir.";
+            }
+
             findings.add(new Finding(severity, msg));
         }
 
@@ -169,10 +180,18 @@ public class SecretLeakService {
         return line;
     }
 
-    /** Ham secret hicbir zaman aynen dondurulmez; yalnizca kismi/maskelenmis hali. */
+    /** Ham secret hicbir zaman aynen dondurulmez; yalnizca kismi/maskelenmis hali.
+     *
+     * Esik 12: 12 karakterden KISA degerler TAMAMEN yildizlanir. Eskiden esik 8
+     * idi ve 4+4=8 karakter acikta birakiyordu — 9 karakterlik bir sirrin
+     * neredeyse tamami (8/9) goruntuleniyordu, bu maskeleme degil goster mekle
+     * esdegerdi. 12'lik esikte en kisa "kismi maskelenen" deger 13 karakter
+     * olur ve en fazla 8/13'u acikta kalir (yine 4 basta + 4 sonda), geri
+     * kalani orta kisimda gizlenir.
+     */
     private String mask(String raw) {
         int len = raw.length();
-        if (len <= 8) {
+        if (len < 12) {
             return "*".repeat(len);
         }
         return raw.substring(0, 4) + "…" + raw.substring(len - 4);

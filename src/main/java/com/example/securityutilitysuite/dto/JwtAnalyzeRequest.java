@@ -1,5 +1,8 @@
 package com.example.securityutilitysuite.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 /**
  * POST /api/v1/jwt/analyze istek govdesi.
  *
@@ -9,5 +12,12 @@ package com.example.securityutilitysuite.dto;
  *               asimetrik algoritmalar icin ortak anahtar (public key) girisi
  *               v1 kapsaminda desteklenmiyor.
  */
-public record JwtAnalyzeRequest(String token, String secret) {
+public record JwtAnalyzeRequest(
+        @NotBlank(message = "Token boş olamaz")
+        @Size(max = 8_000, message = "Token 8.000 karakteri aşamaz")
+        String token,
+
+        @Size(max = 512, message = "Anahtar 512 karakteri aşamaz")
+        String secret
+) {
 }
