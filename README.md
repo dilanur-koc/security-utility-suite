@@ -1,195 +1,178 @@
+Markdown
+
 # security-utility-suite
 
-A lightweight Spring Boot utility suite for network security operations — asynchronous port scanning, file integrity verification, and log-based threat detection — with a built-in dark-themed web control panel. Built with Java 21 Virtual Threads for fast, non-blocking concurrent scanning.
+A comprehensive Spring Boot utility suite for cyber security operations and threat management — network analysis, cryptographic tools, log analysis, threat intelligence, and vulnerability scanning — with a built-in dark-themed web control panel. Powered by Java 21 Virtual Threads and Spring Security for fast, concurrent, and secure execution.
 
 ## Features
 
 * **Port Scanner** — asynchronous TCP-connect scanning powered by Java 21 Virtual Threads (one virtual thread per port probe).
-* **File Integrity Verifier** — computes SHA-256 baseline hashes for tracked files and detects unauthorized changes on demand.
-* **Log Analyzer** — parses raw access/auth logs and flags Brute-Force, Suspicious Activity, SQL Injection, and XSS patterns via rule-based detection.
-* Persistent history storage via Spring Data JPA (H2 by default — zero external setup required).
-* RESTful API for every module (scan, integrity check, log analysis).
-* Input validation via Jakarta Bean Validation (host format, port range, max range size, file path checks).
-* Global exception handling for consistent, predictable JSON error responses across all modules.
-* Integrated Bootstrap 5 + Vanilla JS dark-themed control panel with 3 fully functional module tabs.
-* Clean, layered architecture: `Controller` → `Service` → `Repository` → `Entity`, repeated per module.
-* Configurable connection timeout (tunable per environment — local vs. remote targets).
+* **DNS Query Resolver** — queries A, AAAA, MX, TXT, and NS records for domain name analysis.
+* **SSL/TLS Inspector** — verifies target certificate validity, expiration countdown, and issuer details with internal `NetworkGuard` SSRF protection.
+* **HTTP Security Headers Audit** — checks web targets for missing critical security headers (HSTS, CSP, X-Frame-Options, X-Content-Type-Options, etc.).
+* **Subnet & MAC Analyzer** — calculates CIDR IP ranges, usable hosts, subnet masks, and resolves MAC address OUIs.
+* **Base64 / Hex Converter** — bidirectional encoder/decoder utility for binary-to-text data formats.
+* **Hash Verifier & Cracker** — MD5, SHA-1, SHA-256 hash generation, verification, and dictionary-based hash cracking simulation.
+* **AES-256 Encryptor** — secure symmetric text encryption and decryption using AES-256 GCM.
+* **Metadata (EXIF) Cleaner** — parses and strips sensitive GPS, camera, author, and device metadata from images (JPEG, PNG) and documents (DLP).
+* **JWT Token Analyzer** — decodes headers/payloads, evaluates algorithm strength, and verifies signature validity.
+* **SSH Brute-Force Blocker** — parses auth/sshd logs to detect repeated login failures and generates actionable `ufw` ban rules.
+* **Git & Secret Leak Finder** — scans code/text for hardcoded AWS Keys, GitHub Tokens, and DB credentials with sensitive value masking.
+* **Threat Intel (IOC) Extractor** — extracts, categorizes, and defangs/normalizes IP, URL, and Domain indicators of compromise from raw text.
+* **Phishing URL Detector** — scores URLs for phishing techniques using Levenshtein distance typosquatting checks and `@` userinfo bypass detection.
+* **Web Vulnerability Scanner (XSS/SQLi)** — performs safe, non-destructive `GET` parameter reflection checks for SQL Injection and Reflected XSS with strict rate-limiting and DoS prevention.
 
-> **Status:** All 3 dashboard tabs — Ağ Tarayıcı (Port Scanner), Dosya Bütünlüğü (File Integrity), Log Analizi (Log Analyzer) — are fully functional end-to-end, front-to-back.
->
-> **Roadmap:** An SSL/TLS Certificate Checker module is in progress (entity + repository already in place; service/controller/UI pending).
+> **Status:** All **14 modules** are fully implemented end-to-end (Controller, Service, Repository, DTO, Unit Tests, and UI) and deployed on the dashboard.
+
+## Security & Architecture Principles
+
+* **Defense-in-Depth:** Integrated `NetworkGuard` SSRF filter blocks probes against loopback (`127.0.0.1`, `localhost`), RFC 1918 private networks, and cloud metadata endpoints (`169.254.169.254`).
+* **Role-Based Access Control (RBAC):** Spring Security with automatic initial `ADMIN` setup and restricted H2 Console access.
+* **Data Leakage Protection (DLP):** High-threshold secret masking (12+ chars) and overlap deduplication to prevent accidental credential disclosure.
+* **Rate Limiting & Safety:** Active scanners enforce strict `GET`-only HTTP methods and request delays to prevent DoS or state-changing side effects.
 
 ## Prerequisites
 
 * Java Development Kit (JDK 21 or higher) — the project uses a Gradle toolchain, so Gradle will auto-provision JDK 21 if it's not already installed.
-* No external database required for local development — the project ships with an embedded H2 database by default.
-* (Optional) Docker, if you want to spin up extra test targets for scanning.
+* No external database required for local development — ships with an embedded H2 database by default (SQL Server configuration available for production).
+* Git for version control.
 
 ## Quickstart & Installation
 
 Clone the repository:
 
-```
-git clone https://github.com/dilanur-koc/security-utility-suite.git
+```bash
+git clone [https://github.com/dilanur-koc/security-utility-suite.git](https://github.com/dilanur-koc/security-utility-suite.git)
 cd security-utility-suite
-```
 
-Build the project (uses the Gradle Wrapper — no local Gradle install needed):
+Build and run tests:
+Bash
 
-```
-./gradlew build        # Linux / macOS
-gradlew.bat build       # Windows
-```
+./gradlew test          # Linux / macOS
+.\gradlew test          # Windows (PowerShell)
 
 Run the application:
+Bash
 
-```
 ./gradlew bootRun       # Linux / macOS
-gradlew.bat bootRun      # Windows
-```
+.\gradlew bootRun       # Windows (PowerShell)
 
-Access the interactive dashboard in your browser:
+Access the interactive control panel in your browser:
 
-```
-http://127.0.0.1:8080
-```
+[http://127.0.0.1:8080](http://127.0.0.1:8080)
 
-## API Reference
+API Reference
+Port Scanner
+HTTP
 
-### Port Scanner
-
-**Trigger a port scan**
-
-```
 POST /api/v1/scan
 Content-Type: application/json
-```
 
-Request body:
-
-```json
 {
   "targetHost": "127.0.0.1",
   "startPort": 1,
   "endPort": 1024
 }
-```
 
-Response `201 Created`:
+SSL/TLS Inspector
+HTTP
 
-```json
-{
-  "id": 42,
-  "targetHost": "127.0.0.1",
-  "openPorts": "22,80,8080",
-  "scanDurationMs": 137,
-  "status": "COMPLETED",
-  "createdAt": "2026-07-30T15:47:49"
-}
-```
-
-**Get scan history (paginated)**
-
-```
-GET /api/v1/scan/history?page=0&size=20
-```
-
-Returns a Spring `Page<ScanResult>` of past scan records, most recent first.
-
-### File Integrity Verifier
-
-**Compute a baseline hash for a file**
-
-```
-POST /api/v1/integrity/baseline
+POST /api/v1/ssl/check
 Content-Type: application/json
-```
 
-Request body:
-
-```json
 {
-  "filePath": "/etc/nginx/nginx.conf",
-  "algorithm": "SHA-256"
+  "domain": "example.com"
 }
-```
 
-**Check all tracked files for changes**
+Log Analyzer
+HTTP
 
-```
-GET /api/v1/integrity/check
-```
-
-Returns the current status (`Değişmedi` / `Değişti`) for every tracked file against its stored baseline.
-
-### Log Analyzer
-
-**Analyze log content for threats**
-
-```
 POST /api/v1/logs/analyze
 Content-Type: application/json
-```
 
-Request body:
-
-```json
 {
   "logContent": "203.0.113.44 - - [30/Jul/2026:10:12:01 +0300] \"POST /login HTTP/1.1\" 401 512\n...",
   "logSource": "auth.log"
 }
-```
 
-Detects and persists new findings across 4 categories:
+Metadata (EXIF) Cleaner
+HTTP
 
-* `BRUTE_FORCE` — ≥3 failed logins (401) from the same IP
-* `SUSPICIOUS_ACTIVITY` — ≥3 scanning responses (404/500) or ≥2 unauthorized (403) from the same IP
-* `SQL_INJECTION` — known injection signatures (`UNION SELECT`, `' OR '1'='1`, `; DROP TABLE`, etc.)
-* `XSS` — known XSS signatures (`<script>`, `onerror=`, `javascript:`, etc.)
+POST /api/v1/metadata/clean
+Content-Type: multipart/form-data
 
-**Get alert history (paginated)**
+Secret Leak Finder
+HTTP
 
-```
-GET /api/v1/logs/alerts?page=0&size=20
-```
+POST /api/v1/secrets/scan
+Content-Type: application/json
 
-Returns all past findings, most recent first.
+{
+  "content": "AWS_ACCESS_KEY_ID=AKIAABCDEFGHIJKLMNOP"
+}
 
-## Project Structure
+Phishing URL Detector
+HTTP
 
-```
+POST /api/v1/phishing/analyze
+Content-Type: application/json
+
+{
+  "url": "[http://gooogle.com/login](http://gooogle.com/login)"
+}
+
+Web Vulnerability Scanner
+HTTP
+
+POST /api/v1/vulnerability/scan
+Content-Type: application/json
+
+{
+  "targetUrl": "[http://example.com/search?q=test](http://example.com/search?q=test)",
+  "disclaimerAccepted": true
+}
+
+Project Structure
+
 src/main/java/com/example/securityutilitysuite/
-├── enums/        → ScanStatus, Severity, ThreatType
-├── dto/          → ScanRequest, LogAnalysisRequest (validated inbound payloads)
-├── model/        → ScanResult, SecurityLogAlert, SslCheckResult (JPA entities)
-├── repository/   → ScanResultRepository, SecurityLogAlertRepository, SslCheckResultRepository
-├── service/      → PortScannerService, LogAnalyzerService (virtual-thread / rule-based logic)
-└── controller/   → PortScannerController, LogAnalyzerController, GlobalExceptionHandler
+├── config/       → SecurityConfig (RBAC, Form Login, H2 FrameOptions)
+├── controller/   → REST Controllers for all 14 security modules
+├── dto/          → Inbound/Outbound request payloads with Jakarta @Valid constraints
+├── enums/        → Role, ScanStatus, Severity, ThreatType, IntegrityStatus
+├── model/        → JPA Entities (User, ScanResult, SecurityLogAlert, etc.)
+├── repository/   → Spring Data JPA Repositories
+├── security/     → NetworkGuard (SSRF protection), ClientIpResolver, AuthEvents
+├── service/      → Core business, crypto, virtual-thread scanning, and analysis logic
+└── util/         → Codecs and Error utilities
 
 src/main/resources/
-└── static/index.html   → Bootstrap 5 + Vanilla JS dashboard (3 modules)
-```
+└── static/       → Responsive dark-themed Single Page Application (Dashboard UI)
 
-## Compatibility
+Compatibility
 
 Tested and verified on:
 
-* Java 21 LTS (Virtual Threads)
-* Spring Boot 4.1.0
-* Gradle (via the included Gradle Wrapper)
-* Linux (Pop!_OS / Ubuntu) and Windows
-* Modern web browsers (Chrome, Firefox, Edge, Safari)
+    Java 21 LTS (Virtual Threads)
 
-## Security Note
+    Spring Boot 3.3+ / 4.x
 
-This tool performs live TCP-connect probes and reads file/log content on the hosts and paths you specify. Only scan hosts and networks you own or are explicitly authorized to test — unauthorized port scanning may be illegal in your jurisdiction. `scanme.nmap.org` is a good, legally safe target for casual testing.
+    Gradle (via the included Gradle Wrapper)
 
-## Contributing
+    Linux (Pop!_OS / Ubuntu) and Windows 11
 
-* **Bug Reporting:** Open an issue describing the bug and steps to reproduce.
-* **Feature Requests:** Submit an issue discussing your proposed enhancement.
-* **Pull Requests:** Fork the repo, create your feature branch, and submit a PR!
+    Modern web browsers (Chrome, Firefox, Edge, Safari)
 
-## License
+Security Note & Legal Disclaimer
+
+This tool performs active network probes, HTTP requests, and security testing operations. Only scan hosts, networks, and applications you own or are explicitly authorized to test. Unauthorized vulnerability scanning or port probing may be illegal in your jurisdiction. Users are solely responsible for compliance with applicable laws.
+Contributing
+
+    Bug Reporting: Open an issue describing the bug and steps to reproduce.
+
+    Feature Requests: Submit an issue discussing your proposed enhancement.
+
+    Pull Requests: Fork the repo, create your feature branch, and submit a PR!
+
+License
 
 Distributed under the MIT License.
