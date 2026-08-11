@@ -1372,6 +1372,102 @@
   </div>
 
 
+  <div id="ws-webvuln" class="d-none">
+    <div class="card-suite p-3 p-lg-4 mb-4" style="border-color:rgba(229,72,77,.35);background:rgba(229,72,77,.05);">
+      <div class="d-flex align-items-start gap-2">
+        <i class="bi bi-exclamation-triangle-fill" style="color:#e5484d;font-size:1.3rem;"></i>
+        <div>
+          <h6 class="font-display mb-1" style="color:#e5484d;">Bu modül hedefe gerçek istek gönderir</h6>
+          <p class="mb-0" style="font-size:.84rem;color:#c9d3db;">
+            Diğer tüm araçların aksine bu modül, girdiğiniz URL'ye test amaçlı
+            HTTP istekleri gönderir. Yetkiniz olmayan bir sistemde kullanmak
+            <strong>Türk Ceza Kanunu madde 243</strong> (bilişim sistemine
+            yetkisiz erişim) kapsamına girebilir. Yalnızca kendi sisteminizde
+            veya test etme izniniz olan sistemlerde kullanın.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="card-suite p-3 p-lg-4">
+          <div class="mb-3">
+            <label class="form-label" for="webvulnUrl">Hedef URL (sorgu parametreli)</label>
+            <input type="text" class="form-control font-mono" id="webvulnUrl"
+                   placeholder="https://example.com/search?q=test&amp;page=1">
+            <div class="form-text">Yalnızca GET parametreleri test edilir. URL'de en az bir <code>?param=değer</code> olmalı.</div>
+          </div>
+
+          <div class="form-check mb-3 p-3" style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;">
+            <input class="form-check-input" type="checkbox" id="webvulnAck">
+            <label class="form-check-label" for="webvulnAck" style="font-size:.82rem;">
+              Bu sistemi test etme yetkim olduğunu onaylıyorum ve sorumluluğu kabul ediyorum.
+            </label>
+          </div>
+
+          <button type="button" class="btn btn-scan w-100" id="webvulnBtn" disabled>
+            <i class="bi bi-bug-fill"></i> Taramayı Başlat
+          </button>
+          <div id="webvulnError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+
+          <div id="webvulnProgress" class="d-none mt-4 text-center">
+            <div class="spinner-border" style="color:var(--cyan);width:2rem;height:2rem;" role="status"></div>
+            <div class="text-muted mt-2" style="font-size:.82rem;">Parametreler test ediliyor (hız sınırlı, biraz sürebilir)…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div id="webvulnEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-bug-fill d-block mb-2"></i>
+            Taramak istediğiniz URL'yi soldan girin ve onay kutusunu işaretleyin.
+          </div>
+        </div>
+
+        <div id="webvulnResult" class="d-none">
+          <div class="row g-3 mb-3">
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="webvulnParamCount" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Test Edilen Parametre</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="webvulnReqCount" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Gönderilen İstek</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="stat-tile">
+                <div class="stat-value" id="webvulnFlagged" style="font-size:1.1rem;">0</div>
+                <div class="stat-label">Şüpheli Parametre</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-2">Bulgular</h6>
+            <div id="webvulnFindings"></div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <h6 class="font-display mb-3">Parametre Bazında Sonuç</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0">
+                <thead><tr><th>Parametre</th><th>XSS</th><th>SQLi (Hata)</th><th>SQLi (Boolean)</th></tr></thead>
+                <tbody id="webvulnTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
   <!-- ==================== HASH VERIFIER & CRACKER ==================== -->
   <div id="ws-hash" class="d-none">
     <div class="row g-4">
@@ -4170,6 +4266,112 @@ function closeSidebar(){
            +     '<div class="a-time">' + s.t + '</div></div>'
            + '</div>';
     }).join("");
+  }
+})();
+</script>
+
+<script>
+/* ==========================================================
+   Web Zafiyet Tarayıcı (XSS/SQLi)
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = { CRITICAL:{c:"#e5484d",t:"Kritik"}, HIGH:{c:"#e5484d",t:"Yüksek"},
+                MEDIUM:{c:"#f0a93b",t:"Orta"},     LOW:{c:"#2fd8c8",t:"Düşük"} };
+
+  function esc(v){
+    const t = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+            .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  function evetHayir(deger){
+    return deger
+      ? '<span style="color:#e5484d;">Evet</span>'
+      : '<span style="color:#2fd8c8;">Hayır</span>';
+  }
+
+  const btn = document.getElementById("webvulnBtn");
+  if (!btn) return;
+
+  const ack = document.getElementById("webvulnAck");
+  ack.addEventListener("change", function(){
+    btn.disabled = !ack.checked;
+  });
+
+  btn.addEventListener("click", async function(){
+    const err = document.getElementById("webvulnError");
+    const prog = document.getElementById("webvulnProgress");
+    err.textContent = "";
+
+    if (!ack.checked) {
+      err.textContent = "Devam etmeden önce yasal onay kutusunu işaretlemelisiniz.";
+      return;
+    }
+
+    const url = document.getElementById("webvulnUrl").value.trim();
+    if (!url) {
+      err.textContent = "Önce bir hedef URL girin.";
+      return;
+    }
+
+    btn.disabled = true;
+    prog.classList.remove("d-none");
+    try {
+      const res = await secureFetch("/api/v1/webvuln/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url, legalAcknowledgement: true })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        const msg = body.fields ? Object.values(body.fields).join(" · ") : (body.message || "Tarama başarısız");
+        throw new Error(msg);
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = !ack.checked;
+      prog.classList.add("d-none");
+    }
+  });
+
+  function render(r){
+    document.getElementById("webvulnEmpty").classList.add("d-none");
+    document.getElementById("webvulnResult").classList.remove("d-none");
+
+    document.getElementById("webvulnParamCount").textContent = r.parametersTested;
+    document.getElementById("webvulnReqCount").textContent = r.requestsSent;
+    const flaggedCount = (r.results || []).filter(function(x){
+      return x.xssSuspected || x.sqlErrorSuspected || x.sqlBooleanSuspected;
+    }).length;
+    document.getElementById("webvulnFlagged").textContent = flaggedCount;
+
+    const fw = document.getElementById("webvulnFindings");
+    fw.innerHTML = (r.findings || []).map(function(f){
+      const s = SEV[f.severity] || SEV.LOW;
+      return '<div class="alert-feed-item">'
+           +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+           +   '<div class="flex-grow-1"><div class="a-txt">' + esc(f.message) + '</div>'
+           +     '<div class="a-time">' + s.t + '</div></div>'
+           + '</div>';
+    }).join("");
+
+    const tbody = document.getElementById("webvulnTable");
+    if (!r.results || r.results.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-muted">Test edilecek parametre bulunamadı.</td></tr>';
+    } else {
+      tbody.innerHTML = r.results.map(function(x){
+        return '<tr>'
+             +   '<td class="font-mono">' + esc(x.parameter) + '</td>'
+             +   '<td>' + evetHayir(x.xssSuspected) + '</td>'
+             +   '<td>' + evetHayir(x.sqlErrorSuspected) + '</td>'
+             +   '<td>' + evetHayir(x.sqlBooleanSuspected) + '</td>'
+             + '</tr>';
+      }).join("");
+    }
   }
 })();
 </script>

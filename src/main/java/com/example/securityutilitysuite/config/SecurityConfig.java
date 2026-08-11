@@ -12,16 +12,16 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
-import org.springframework.security.web.csrf.CsrfFilter;
-import org.springframework.security.web.csrf.CsrfToken;
-import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.ObjectMapper;
@@ -42,11 +42,6 @@ public class SecurityConfig {
         this.clientIpResolver = clientIpResolver;
     }
 
-    /**
-     * /api/** eslesmesi. getServletPath() bazi servlet yapilandirmalarinda
-     * bos donebildigi icin getRequestURI() kullaniliyor; baglam yolu varsa
-     * onu da hesaba katar.
-     */
     private static final RequestMatcher API_MATCHER = request -> {
         String uri = request.getRequestURI();
         String context = request.getContextPath();
@@ -67,53 +62,38 @@ public class SecurityConfig {
         AccessDeniedHandler apiAccessDeniedHandler = jsonAccessDeniedHandler(objectMapper);
 
         http
-                // CSRF korumasi ACIK. Uygulama oturum cerezi (JSESSIONID) ile
-                // kimlik dogruladigi icin, koruma olmadan baska bir site
-                // kullanicinin tarayicisina bizim adimiza POST yaptirabilirdi
-                // (orn. onun oturumuyla tarama baslatmak).
-                //
-                // Token cerezde tasinir (XSRF-TOKEN, HttpOnly degil) ki arayuz
-                // JavaScript'i okuyup X-XSRF-TOKEN basligiyla geri gonderebilsin.
-                //
-                // Duz isleyici kullaniliyor: Spring'in varsayilan XOR'lu
-                // isleyicisinde cerezdeki HAM token ile sunucunun bekledigi
-                // deger farkli olur ve arayuzden gelen her POST 403 donerdi.
-                // Odunc: BREACH'e karsi ek karistirma yok; yerel kullanim
-                // icin kabul edilebilir.
-                //
-                // h2-console kendi formlarini gonderdigi ve token ekleyemedigi
-                // icin kapsam disi; zaten yalnizca ADMIN erisebiliyor.
+                // 1. CSRF KORUMASI (Dışarıdan gelen log test istekleri için hem /api/v1/logs/** hem de /api/logs/** hariç tutuldu)
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
-                        .ignoringRequestMatchers("/h2-console/**")
+                        .ignoringRequestMatchers("/h2-console/**", "/api/v1/logs/**", "/api/logs/**")
                 )
-                // Spring token'i "gerektiginde" uretir; o durumda sayfa ilk
-                // yuklendiginde cerez olusmaz ve ilk POST basarisiz olurdu.
-                // Bu filtre token'i her istekte zorla uretir.
                 .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
-                // BRUTE-FORCE RATE LIMITING FILTRESI
                 .addFilterBefore(new LoginRateLimitFilter(loginAttemptService, clientIpResolver, objectMapper),
                         UsernamePasswordAuthenticationFilter.class)
+
+                // 2. YETKİLENDİRME (İzinler Yukarıdan Aşağıya Sırayla Okunur)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/login.html",
                                 "/css/**",
                                 "/js/**"
                         ).permitAll()
-                        // Kayit ucu ACIK BIRAKILIR ama kimin kayit olabilecegine
-                        // RegistrationService karar verir: sistemde hic kullanici
-                        // yoksa (ilk kurulum) serbest, sonrasinda yalnizca ADMIN.
                         .requestMatchers("/api/auth/register", "/api/auth/setup-status").permitAll()
-                        // h2-console tum veritabanina okuma/yazma erisimi verir.
+
+                        // 🟢 LOG TEST ENDPOINT'LERİ (anyRequest'ten ÖNCE):
+                        .requestMatchers("/api/v1/logs/**", "/api/logs/**").permitAll()
+
                         .requestMatchers("/h2-console/**").hasRole("ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
+                        // 🛑 anyRequest EN SONDA OLMALI!
                         .anyRequest().authenticated()
                 )
                 .formLogin(form -> form
-                        .loginPage("/login.html")           // kendi giris sayfamiz
-                        .loginProcessingUrl("/perform-login") // formun POST edecegi adres
-                        .defaultSuccessUrl("/index.html", true) // basarili giriste dashboard'a git
+                        .loginPage("/login.html")
+                        .loginProcessingUrl("/perform-login")
+                        .defaultSuccessUrl("/index.html", true)
                         .failureUrl("/login.html?error=true")
                         .permitAll()
                 )
@@ -158,9 +138,6 @@ public class SecurityConfig {
         };
     }
 
-    // =========================================================================
-    // BRUTE-FORCE ENGELLEME FILTRESI (RATE LIMIT FILTER)
-    // =========================================================================
     private static class LoginRateLimitFilter extends OncePerRequestFilter {
 
         private final LoginAttemptService loginAttemptService;
@@ -186,7 +163,7 @@ public class SecurityConfig {
                 String username = request.getParameter("username");
 
                 if (loginAttemptService.engelliMi(clientIP, username)) {
-                    response.setStatus(429); // 429 Too Many Requests
+                    response.setStatus(429);
                     response.setCharacterEncoding("UTF-8");
 
                     if (request.getHeader("Accept") != null && request.getHeader("Accept").contains(MediaType.APPLICATION_JSON_VALUE)) {
@@ -208,13 +185,6 @@ public class SecurityConfig {
 
     }
 
-    /**
-     * CSRF token'ini her istekte zorla uretir.
-     *
-     * Spring token'i tembel (deferred) uretir: kimse istemezse olusturulmaz
-     * ve XSRF-TOKEN cerezi yazilmaz. Arayuz cerezi okumak zorunda oldugu
-     * icin, cerez yoksa ilk POST 403 doner.
-     */
     private static class CsrfCookieFilter extends OncePerRequestFilter {
 
         @Override
@@ -224,7 +194,7 @@ public class SecurityConfig {
                 throws ServletException, IOException {
             CsrfToken token = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
             if (token != null) {
-                token.getToken();   // uretimi tetikler, cerez yazilir
+                token.getToken();
             }
             filterChain.doFilter(request, response);
         }
