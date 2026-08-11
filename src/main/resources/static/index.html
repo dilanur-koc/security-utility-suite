@@ -1329,6 +1329,49 @@
   </div>
 
 
+  <div id="ws-phishing" class="d-none">
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="card-suite p-3 p-lg-4">
+          <div class="mb-3">
+            <label class="form-label" for="phishUrl">URL</label>
+            <input type="text" class="form-control font-mono" id="phishUrl"
+                   placeholder="http://paypal.verify-account-now.ru">
+            <div class="form-text">Tamamen pasif — bu URL'ye hiçbir ağ isteği gönderilmez, yalnızca metin analiz edilir.</div>
+          </div>
+          <button type="button" class="btn btn-scan w-100" id="phishBtn">
+            <i class="bi bi-link-45deg"></i> Analiz Et
+          </button>
+          <div id="phishError" class="text-danger mt-2" style="font-size:.8rem;"></div>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div id="phishEmpty" class="card-suite p-4 h-100 d-flex align-items-center justify-content-center">
+          <div class="empty-state mb-0">
+            <i class="bi bi-link-45deg d-block mb-2"></i>
+            İncelemek istediğiniz URL'yi soldan girin.
+          </div>
+        </div>
+
+        <div id="phishResult" class="d-none">
+          <div class="card-suite p-3 p-lg-4 mb-3">
+            <h6 class="font-display mb-3">Ayrıştırma</h6>
+            <div class="table-responsive">
+              <table class="table table-suite mb-0"><tbody id="phishDetails"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card-suite p-3 p-lg-4">
+            <h6 class="font-display mb-3">Bulgular</h6>
+            <div id="phishFindings"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
   <!-- ==================== HASH VERIFIER & CRACKER ==================== -->
   <div id="ws-hash" class="d-none">
     <div class="row g-4">
@@ -4026,6 +4069,107 @@ function closeSidebar(){
              + '</tr>';
       }).join("");
     }
+  }
+})();
+</script>
+
+<script>
+/* ==========================================================
+   Phishing URL Detector
+   ========================================================== */
+(function(){
+  "use strict";
+
+  const SEV = { CRITICAL:{c:"#e5484d",t:"Kritik"}, HIGH:{c:"#e5484d",t:"Yüksek"},
+                MEDIUM:{c:"#f0a93b",t:"Orta"},     LOW:{c:"#2fd8c8",t:"Düşük"} };
+
+  function esc(v){
+    const t = (v === null || v === undefined || v === "") ? "—" : String(v);
+    return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+            .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  function evetHayir(deger){
+    return deger
+      ? '<span style="color:#e5484d;">Evet</span>'
+      : '<span style="color:#2fd8c8;">Hayır</span>';
+  }
+
+  /** evetHayir'in tersi: burada "Evet" iyi (yesil), "Hayir" kotu (kirmizi). */
+  function evetHayirIyiyse(deger){
+    return deger
+      ? '<span style="color:#2fd8c8;">Evet</span>'
+      : '<span style="color:#e5484d;">Hayır</span>';
+  }
+
+  const btn = document.getElementById("phishBtn");
+  if (!btn) return;
+
+  btn.addEventListener("click", async function(){
+    const err = document.getElementById("phishError");
+    err.textContent = "";
+
+    const url = document.getElementById("phishUrl").value.trim();
+    if (!url) {
+      err.textContent = "Önce bir URL girin.";
+      return;
+    }
+
+    btn.disabled = true;
+    try {
+      const res = await secureFetch("/api/v1/phishing/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(function(){ return {}; });
+        const msg = body.fields ? Object.values(body.fields).join(" · ") : (body.message || "İşlem başarısız");
+        throw new Error(msg);
+      }
+      render(await res.json());
+    } catch (ex) {
+      err.textContent = ex.message || "Beklenmeyen bir hata oluştu.";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function render(r){
+    document.getElementById("phishEmpty").classList.add("d-none");
+    document.getElementById("phishResult").classList.remove("d-none");
+
+    const rows = [];
+    function satir(k, v){ rows.push('<tr><td class="text-muted" style="width:38%;">' + k + '</td><td>' + v + '</td></tr>'); }
+
+    satir("Ayrıştırıldı", evetHayirIyiyse(r.parsed));
+    satir("Host", '<span class="font-mono">' + esc(r.host) + '</span>');
+    satir("Şema", esc(r.scheme));
+    satir("IP tabanlı adres", evetHayir(r.ipBased));
+    satir("Punycode", evetHayir(r.punycode));
+    satir("Userinfo (\"@\") hilesi", evetHayir(r.hasUserInfoTrick));
+    satir("Şüpheli TLD", r.suspiciousTld ? ('.' + esc(r.suspiciousTld)) : '<span class="text-muted">yok</span>');
+    satir("Alt alan adı derinliği", r.subdomainDepth);
+    satir("Bulunan marka anahtar kelimeleri",
+      (r.brandKeywordsFound && r.brandKeywordsFound.length)
+        ? r.brandKeywordsFound.map(function(k){ return '<span class="port-chip">' + esc(k) + '</span>'; }).join(" ")
+        : '<span class="text-muted">yok</span>');
+    satir("En yakın marka eşleşmesi (typosquat)",
+      r.closestBrandMatch
+        ? esc(r.closestBrandMatch) + ' <span class="text-muted">(mesafe: ' + r.closestBrandDistance + ')</span>'
+        : '<span class="text-muted">yok</span>');
+
+    document.getElementById("phishDetails").innerHTML = rows.join("");
+
+    const fw = document.getElementById("phishFindings");
+    fw.innerHTML = (r.findings || []).map(function(f){
+      const s = SEV[f.severity] || SEV.LOW;
+      return '<div class="alert-feed-item">'
+           +   '<span class="feed-dot" style="background:' + s.c + ';"></span>'
+           +   '<div class="flex-grow-1"><div class="a-txt">' + esc(f.message) + '</div>'
+           +     '<div class="a-time">' + s.t + '</div></div>'
+           + '</div>';
+    }).join("");
   }
 })();
 </script>
