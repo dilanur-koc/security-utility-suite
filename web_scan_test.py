@@ -9,15 +9,25 @@ SCANNER_URL = f"{BASE_URL}/api/v1/webvuln/scan"
 USERNAME = "admin"
 PASSWORD = "Sifre123456"
 
+# WebVulnScanRequest DTO'suna uygun payload'lar
 TEST_TARGETS = [
-    {"targetUrl": "https://example.com/search?q=<svg onload=alert(document.domain)>", "scanXss": True, "scanSqli": False},
-    {"targetUrl": "https://example.com/user?id=1' AND 1=2 UNION ALL SELECT 1, @@version--", "scanXss": False, "scanSqli": True},
-    {"targetUrl": "https://example.com/comment?text=javascript:alert(document.cookie)", "scanXss": True, "scanSqli": True}
+    {
+        "url": "https://example.com/search?q=<svg onload=alert(document.domain)>",
+        "legalAcknowledgement": True
+    },
+    {
+        "url": "https://example.com/user?id=1' AND 1=2 UNION ALL SELECT 1, @@version--",
+        "legalAcknowledgement": True
+    },
+    {
+        "url": "https://example.com/comment?text=javascript:alert(document.cookie)",
+        "legalAcknowledgement": True
+    }
 ]
 
 def run_web_scanner_test():
     session = requests.Session()
-    print("🔑 1. Oturum açılıyor...")
+    print("🔑 1. Oturum açılıyor ve CSRF Token alınıyor...")
     try:
         login_page_res = session.get(LOGIN_PAGE_URL)
         xsrf_token = session.cookies.get("XSRF-TOKEN")
@@ -43,12 +53,16 @@ def run_web_scanner_test():
 
     print("🚀 Web Zafiyet Tarama istekleri gönderiliyor...\n")
     for idx, target in enumerate(TEST_TARGETS, 1):
-        print(f"🔍 [{idx}/{len(TEST_TARGETS)}] Hedef: {target['targetUrl']}")
+        print(f"🔍 [{idx}/{len(TEST_TARGETS)}] Hedef: {target['url']}")
         try:
             res = session.post(SCANNER_URL, json=target, headers=req_headers)
             print(f"   ⚡ Status: {res.status_code} OK")
+            if res.status_code == 200:
+                print(f"   📩 Yanıt Özeti: {res.text[:200]}...\n")
+            else:
+                print(f"   ⚠️ Hata Detayı: {res.text}\n")
         except Exception as e:
-            print(f"   ❌ Hata: {e}")
+            print(f"   ❌ Hata: {e}\n")
 
 if __name__ == "__main__":
     run_web_scanner_test()
