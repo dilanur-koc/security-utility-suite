@@ -4,7 +4,7 @@ import requests
 BASE_URL = "http://localhost:8080"
 LOGIN_PAGE_URL = f"{BASE_URL}/login.html"
 PERFORM_LOGIN_URL = f"{BASE_URL}/perform-login"
-SCANNER_URL = f"{BASE_URL}/api/v1/scanner/scan"
+SCANNER_URL = f"{BASE_URL}/api/v1/webvuln/scan"
 
 USERNAME = "admin"
 PASSWORD = "Sifre123456"
