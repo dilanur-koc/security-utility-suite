@@ -8,6 +8,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.Base64;
+
 import static com.example.securityutilitysuite.dto.CryptoRequest.Algorithm.AES_GCM;
 import static com.example.securityutilitysuite.dto.CryptoRequest.Algorithm.CAESAR;
 import static com.example.securityutilitysuite.dto.CryptoRequest.Operation.DECRYPT;
@@ -86,15 +88,18 @@ class CryptoServiceTest {
         void veriDegistirilmis() {
             String sifreli = sifrele("gizli mesaj", PAROLA);
 
-            // Base64'un son anlamli karakterini degistir
-            char[] c = sifreli.toCharArray();
-            int i = c.length - 1;
-            while (i >= 0 && c[i] == '=') i--;
-            c[i] = (c[i] == 'A') ? 'B' : 'A';
-            String bozuk = new String(c);
+            // BAYT seviyesinde degistiriyoruz, karakter seviyesinde degil.
+            // Base64'te son karakterin bazi bitleri kullanilmaz; karakteri
+            // degistirmek cozulen baytlari HER ZAMAN degistirmez (olculdu:
+            // 100 denemenin 9'unda bayt ayni kaliyor). O durumda GCM hakli
+            // olarak "bozulma yok" der ve test rastgele basarisiz olurdu.
+            byte[] ham = Base64.getDecoder().decode(sifreli);
+            ham[ham.length - 1] ^= 0x01;   // dogrulama etiketinin son bitini cevir
+            String bozuk = Base64.getEncoder().encodeToString(ham);
 
             assertThatThrownBy(() -> coz(bozuk, PAROLA))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("parola yanlış veya veri değiştirilmiş");
         }
 
         @Test
