@@ -175,4 +175,4 @@ Contributing
 
 License
 
-Distributed under the MIT License.
+Distributed under the MIT License..
